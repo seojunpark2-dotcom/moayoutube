@@ -260,7 +260,18 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
           : path.join(ROOT, "library", path.basename(item.file)),
         sources,
         cobalt:
-          youtube?.provider === "cobalt" ? { id: id.slice(3) } : undefined,
+          youtube?.provider === "cobalt"
+            ? {
+                id: id.slice(3),
+                cached:
+                  format === "mp4"
+                    ? youtube.selection.videos.get(quality)
+                    : {
+                        ...youtube.selection.audio,
+                        sources: youtube.selection.audio.sources.slice(1),
+                      },
+              }
+            : undefined,
         output,
         format: outputFormat,
         copyAudio: format === "original",
@@ -289,7 +300,10 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
           99,
           Math.round(
             (youtube ? 75 : 0) +
-              (+m[1] / (item.media.duration * 1000000)) * (youtube ? 25 : 100),
+              (+m[1] /
+                ((job.sourceDuration || item.media.duration || Infinity) *
+                  1000000)) *
+                (youtube ? 25 : 100),
           ),
         );
       if (line.startsWith("transfer=")) {

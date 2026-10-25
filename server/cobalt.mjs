@@ -89,6 +89,7 @@ export function parseCobalt(data, id, origin = cobaltOrigin()) {
     throw Error("Cobalt 원본 영상의 해상도를 확인하지 못했습니다.");
   return {
     sources: data.tunnel.map((u) => cobaltTunnelURL(u, origin)),
+    expires: Date.now() + 60_000,
     height,
     width,
     title: String(data.output?.metadata?.title || "YouTube 영상").slice(0, 300),
@@ -189,7 +190,7 @@ export async function analyzeCobalt(id, request = requestCobalt) {
     first ||= item;
     // Cobalt can return its best quality when a requested tier is absent.
     // Only advertise the actual dimensions in the classic filename.
-    if (item.height > 0 && item.height <= 1080) videos.set(item.height, {});
+    if (item.height > 0 && item.height <= 1080) videos.set(item.height, item);
   }
   if (!videos.size)
     throw (
@@ -201,7 +202,7 @@ export async function analyzeCobalt(id, request = requestCobalt) {
     title: first.title,
     allowConvert: true,
     media: { duration: null, audio: true },
-    selection: { videos, audio: {} },
+    selection: { videos, audio: first },
     info: {
       id: "yt:" + id,
       title: first.title,

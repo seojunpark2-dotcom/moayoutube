@@ -14,10 +14,13 @@ function event(value) {
 }
 try {
   if (cfg.cobalt) {
-    const resolved = await requestCobalt(cfg.cobalt.id, {
-      quality: cfg.quality,
-      audio: cfg.format !== "mp4",
-    });
+    const resolved =
+      cfg.cobalt.cached?.expires > Date.now() + 5000
+        ? cfg.cobalt.cached
+        : await requestCobalt(cfg.cobalt.id, {
+            quality: cfg.quality,
+            audio: cfg.format !== "mp4",
+          });
     if (cfg.format === "mp4" && resolved.height !== cfg.quality)
       throw Error(
         "선택한 화질의 원본이 변경되었습니다. 링크를 다시 확인해 주세요.",

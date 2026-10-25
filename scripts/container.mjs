@@ -30,6 +30,7 @@ const env = {
   DURATION_LIMIT: "18000",
   RATELIMIT_MAX: "120",
   FORCE_LOCAL_PROCESSING: "always",
+  TUNNEL_LIFESPAN: "90",
 };
 for (const key of [
   "PORT",
