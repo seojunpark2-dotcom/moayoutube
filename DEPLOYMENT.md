@@ -21,6 +21,8 @@ docker run -d --name moadrop-api --restart unless-stopped \
 
 Docker 없이 실행하려면 `npm ci`, `npm run setup:youtube`, `npm run setup`을 실행하고 `API_HOST=0.0.0.0`, `WEB_ORIGIN` 및 필요 시 `API_PORT`를 호스팅 환경에 지정한 뒤 `node server/index.mjs`를 프로세스 관리자로 실행하세요. Windows의 로컬 개발은 기존 `npm run dev`를 사용합니다.
 
+Render에서는 Dockerfile Path를 `Dockerfile.api`, Health Check Path를 `/api/health`로 지정합니다. 서버는 호스팅의 `PORT`를 우선 사용하고, 없으면 `API_PORT`, 둘 다 없으면 4000을 사용합니다. Render의 기본 `PORT=10000`은 그대로 두세요. `Port scan timeout ... open port 10000` 오류는 이전 코드의 4000 포트 고정 문제이며, v1.3.2 이상 커밋으로 다시 배포하면 됩니다. Docker Command는 비워 두어 Dockerfile의 기본 명령을 사용합니다.
+
 임시 다운로드는 `.data/jobs`에 생성됩니다. 실행 사용자가 쓰기 가능해야 하며 컨테이너는 기본 `node` 사용자로 실행합니다. 작업은 메모리에 보관하므로 재시작·배포 시 진행 작업은 중단됩니다. 영속 볼륨은 등록 소스를 보존하며, 이전 작업 파일은 시작 시 정리됩니다. 다중 복제 인스턴스를 사용하지 마세요.
 
 ## 2. Vercel에 GitHub 저장소 연결

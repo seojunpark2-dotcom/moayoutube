@@ -420,13 +420,11 @@ app.use((err, req, res, next) => {
         : err.message || "요청을 처리하지 못했습니다.",
   });
 });
-app.listen(
-  Number(process.env.API_PORT || process.env.PORT || 4000),
-  process.env.API_HOST || "127.0.0.1",
-  () =>
-    console.log(
-      "변환 API 포트: " + (process.env.API_PORT || process.env.PORT || 4000),
-    ),
+const listenPort = Number(process.env.PORT || process.env.API_PORT || 4000);
+if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535)
+  throw Error("PORT 또는 API_PORT에 1~65535 범위의 포트를 지정하세요.");
+app.listen(listenPort, process.env.API_HOST || "127.0.0.1", () =>
+  console.log("변환 API 포트: " + listenPort),
 );
 function stopWorker(child) {
   if (process.platform === "win32" && child.pid)

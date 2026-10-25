@@ -7,7 +7,7 @@ COPY requirements-youtube.txt ./
 RUN python3 -m pip install --no-cache-dir --target .tools/python -r requirements-youtube.txt
 COPY server ./server
 COPY scripts/sample.mjs ./scripts/sample.mjs
-ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=4000 PYTHON_BIN=python3
+ENV NODE_ENV=production API_HOST=0.0.0.0 PYTHON_BIN=python3
 RUN mkdir -p /app/.data && chown -R node:node /app
 USER node
 EXPOSE 4000

@@ -74,6 +74,45 @@ test(
   },
 );
 const base = "http://127.0.0.1:4100";
+
+test(
+  "호스팅 PORT가 API_PORT보다 우선하며 실제 지정 포트에서 응답",
+  { timeout: 15000 },
+  async () => {
+    const child = spawn(process.execPath, ["server/index.mjs"], {
+      env: {
+        ...process.env,
+        PORT: "4312",
+        API_PORT: "4313",
+        API_HOST: "127.0.0.1",
+        NODE_ENV: "test",
+      },
+      stdio: "pipe",
+      windowsHide: true,
+    });
+    let logs = "";
+    child.stdout.on("data", (chunk) => (logs += chunk));
+    child.stderr.resume();
+    try {
+      let health;
+      for (let i = 0; i < 50; i++) {
+        try {
+          const response = await fetch("http://127.0.0.1:4312/api/health");
+          if (response.ok) {
+            health = await response.json();
+            break;
+          }
+        } catch {}
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      assert.equal(health?.ok, true);
+      assert.match(logs, /변환 API 포트: 4312/);
+    } finally {
+      child.kill();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  },
+);
 async function post(route, body) {
   return fetch(base + route, {
     method: "POST",
