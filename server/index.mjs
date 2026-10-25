@@ -1,4 +1,5 @@
 import express from "express";
+import metadata from "../package.json" with { type: "json" };
 import { rateLimit } from "express-rate-limit";
 import { randomUUID } from "node:crypto";
 import { spawn, execFile } from "node:child_process";
@@ -64,6 +65,7 @@ const jobLimit = rateLimit({
 app.get("/api/health", (_, res) =>
   res.json({
     ok: true,
+    version: metadata.version,
     active: [...jobs.values()].filter((j) => j.state === "processing").length,
   }),
 );
@@ -126,6 +128,8 @@ app.post("/api/analyze", async (req, res) => {
       downloadable: false,
       convertible: false,
       permission: downloadError,
+      downloadErrorCode: streams.reason.code || "YOUTUBE_UNSUPPORTED_FORMAT",
+      youtube: true,
     });
   }
   return res.status(422).json({

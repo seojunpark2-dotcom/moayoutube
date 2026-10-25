@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { parseURL, LIMIT } from "./library.mjs";
+import { youtubeFailure } from "./youtube-errors.mjs";
 const cache = new Map();
 let extracting = 0;
 export function youtubeMediaURL(value) {
@@ -173,16 +174,7 @@ export async function analyzeYoutube(id) {
     cache.set(info.id, entry);
     return entry;
   } catch (e) {
-    if (e.killed) throw Error("YouTube 분석 제한 시간(45초)을 초과했습니다.");
-    if (e.stderr?.includes("No module named"))
-      throw Error(
-        "YouTube 처리 도구가 설치되지 않았습니다. npm run setup:youtube를 실행해 주세요.",
-      );
-    if (e.stderr)
-      throw Error(
-        "YouTube에서 영상을 제공하지 않았습니다. 비공개·지역 제한·로그인 필요·봇 확인 또는 네트워크 제한이 있을 수 있습니다. 인증·접근 제한 우회는 시도하지 않습니다.",
-      );
-    throw e;
+    throw youtubeFailure(e);
   } finally {
     extracting--;
   }

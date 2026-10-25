@@ -644,7 +644,11 @@ export default function Home() {
                 <div className="blocked">
                   <ShieldCheck size={20} />
                   <div>
-                    <strong>정보 조회만 가능한 링크예요</strong>
+                    <strong>
+                      {media.youtube
+                        ? "이 서버에서 다운로드 연결에 실패했어요"
+                        : "정보 조회만 가능한 링크예요"}
+                    </strong>
                     <p>{media.permission}</p>
                   </div>
                 </div>
