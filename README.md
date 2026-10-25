@@ -2,6 +2,8 @@
 
 한국어 영상·음원 다운로드 웹앱. Next.js + TypeScript + Tailwind CSS 프런트엔드와 별도 Node.js/Express API, FFmpeg 자식 프로세스로 구성됩니다. 데이터베이스·회원가입·유료 API가 없습니다.
 
+v1.4.0부터 Render용 `Dockerfile.api`에는 Cobalt 서버가 포함됩니다. 새 서비스나 다운로드 API 키 없이 같은 Render 주소에서 실행하며, Vercel 화면 주소도 유지합니다. Windows의 `npm run dev`는 기존 yt-dlp 방식을 사용합니다. 배포·원복·제한은 [DEPLOYMENT.md](DEPLOYMENT.md)를 참고하세요. Cobalt 연결로 YouTube의 서버 접근 제한이 자동 해결되는 것은 아니며 실제 다운로드 성공 여부를 별도로 확인해야 합니다.
+
 ## 시작하기 (Windows / macOS / Linux)
 
 Node.js 24.x, Python 3.10 이상과 pip가 필요합니다. FFmpeg·FFprobe 바이너리는 npm 패키지로 프로젝트 안에 설치되므로 전역 설치가 필요 없습니다.

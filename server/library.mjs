@@ -24,7 +24,7 @@ export async function saveLibrary(items) {
 }
 export async function probeFile(file) {
   const { stdout } = await promisify(execFile)(
-    probe.path,
+    process.env.FFPROBE_PATH || probe.path,
     [
       "-max_alloc",
       "67108864",

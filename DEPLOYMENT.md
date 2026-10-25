@@ -2,6 +2,18 @@
 
 이 저장소에는 웹 화면과 실제 변환 서버 코드가 모두 포함되어 있습니다. **Vercel에 저장소를 연결하는 것만으로 다운로드 서버까지 실행되지는 않습니다.**
 
+## v1.4.0: 기존 Render에서 Cobalt 사용
+
+`Dockerfile.api`는 공식 Cobalt 11 이미지를 고정 digest로 사용합니다. 컨테이너 안에서 Cobalt는 `127.0.0.1:9000`, 사이트 API는 Render의 `PORT`에서 실행됩니다. 새 서비스·도메인·유료 다운로드 API 키가 필요하지 않습니다. Render의 Dockerfile Path는 `Dockerfile.api`, Docker Command는 빈 값, Health Check Path는 `/api/health`로 유지하고 최신 커밋을 배포하세요. 기존 Docker Command가 입력되어 있다면 반드시 지워야 번들 시작 스크립트가 실행됩니다.
+
+기존 환경변수 `PORT=10000`, `WEB_ORIGIN=https://moayoutube.vercel.app`은 유지합니다. `YOUTUBE_PROVIDER`·`COBALT_URL`을 별도로 설정했다면 삭제하여 이미지 기본값을 사용하세요. Vercel의 `API_ORIGIN=https://moayoutube.onrender.com`도 유지합니다. `/api/health`에서 `version: "1.4.0"`, `youtubeProvider: "cobalt"`를 확인할 수 있습니다.
+
+API가 Cobalt의 `local-processing` 원본 터널을 받아 기존 작업 프로세스에서 내려받고 FFmpeg로 변환합니다. Cobalt에 MP3 변환을 중복 요청하지 않으므로 기존 MP3 128/192/320, M4A, OPUS 메뉴가 유지됩니다. 원본 음원 복사는 Cobalt에서 정확한 원본 코덱을 조회하지 못하므로 표시하지 않습니다. 반환된 파일명에 포함된 실제 높이만 화질에 표시하며, 길이는 원본 파일 수신 후 FFprobe로 검사합니다. Cobalt 제한은 5시간(18000초), 기존 파일 한도는 2GiB입니다. 긴 영상은 낮은 화질 또는 음원을 사용하세요.
+
+공식 Cobalt 코드와 라이선스 파일은 이미지 `/app`에 그대로 유지됩니다. Cobalt API는 AGPL-3.0이며 출처·소스·라이선스는 [공식 저장소](https://github.com/imputnet/cobalt), [라이선스](https://github.com/imputnet/cobalt/blob/main/api/LICENSE)에 있습니다. 이 프로젝트는 별도 HTTP 어댑터를 사용하며 Cobalt 원본을 수정하지 않습니다. Cobalt 자체를 수정·배포할 때는 해당 라이선스 의무를 확인하세요.
+
+Render 무료 인스턴스의 수면·메모리·디스크 제약은 그대로 적용됩니다. Cobalt에서도 YouTube가 봇 확인을 요구하면 오류를 표시하며, 쿠키·세션 생성기·프록시 우회 기능을 설정하지 않습니다. 컨테이너 실행 성공과 YouTube 다운로드 성공은 별도 검증 대상입니다.
+
 ## 1. 변환 서버를 먼저 실행
 
 Node.js 24, Python 3.10 이상, 인터넷 연결, 최소 10GiB 여유 디스크가 있는 Linux x64 VM 또는 컨테이너 서버를 사용합니다. 단일 인스턴스로 운영하며 자동 수면·요청 중 프로세스 종료를 사용하지 마세요. FFmpeg는 npm 의존성에 포함됩니다.
@@ -14,7 +26,7 @@ docker volume create moadrop-data
 docker run -d --name moadrop-api --restart unless-stopped \
   -p 127.0.0.1:4000:4000 \
   -e WEB_ORIGIN=https://your-project.vercel.app \
-  -v moadrop-data:/app/.data moadrop-api
+  -v moadrop-data:/opt/moadrop/.data moadrop-api
 ```
 
 `WEB_ORIGIN`을 사용할 웹사이트 원점으로 변경하세요. 서버에 HTTPS 도메인(예: `https://api.example.com`)과 리버스 프록시를 연결하여 포트 4000으로 전달합니다. 큰 파일 다운로드를 프록시가 메모리에 버퍼링하지 않도록 하고 최소 120분 연결 시간·최소 2GiB 응답을 허용하세요. `/api/health`가 `{"ok":true,"active":0}`을 반환하는지 확인합니다.

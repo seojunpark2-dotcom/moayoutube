@@ -6,7 +6,7 @@ import { spawn, execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { mkdir, rm, stat, readdir } from "node:fs/promises";
 import path from "node:path";
-import { analyzeYoutube, youtubeCached } from "./youtube.mjs";
+import { analyzeYoutube, youtubeCached, youtubeProvider } from "./youtube.mjs";
 import { JOB_TIMEOUT_MS } from "./limits.mjs";
 import { jobKey } from "./job-key.mjs";
 import { isAllowedWebOrigin } from "./web-origins.mjs";
@@ -66,6 +66,7 @@ app.get("/api/health", (_, res) =>
   res.json({
     ok: true,
     version: metadata.version,
+    youtubeProvider: youtubeProvider(),
     active: [...jobs.values()].filter((j) => j.state === "processing").length,
   }),
 );
@@ -239,7 +240,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
   };
   jobs.set(token, job);
   let sources;
-  if (youtube) {
+  if (youtube && youtube.provider !== "cobalt") {
     if (format === "mp4") {
       const v = youtube.selection.videos.get(quality);
       sources = [v.url];
@@ -258,6 +259,8 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
           ? undefined
           : path.join(ROOT, "library", path.basename(item.file)),
         sources,
+        cobalt:
+          youtube?.provider === "cobalt" ? { id: id.slice(3) } : undefined,
         output,
         format: outputFormat,
         copyAudio: format === "original",
@@ -327,6 +330,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
       if (
         !Number.isFinite(duration) ||
         duration <= 0 ||
+        !(job.sourceDuration || item.media.duration) ||
         Math.abs(duration - (job.sourceDuration || item.media.duration)) > 2
       )
         throw Error("변환 결과가 원본 길이와 일치하지 않습니다.");
@@ -342,9 +346,9 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
         !actual.streams.some((s) => s.codec_type === "audio")
       )
         throw Error("음원 트랙을 확인하지 못했습니다.");
-      if (sources)
+      if (sources || youtube?.provider === "cobalt")
         await Promise.all(
-          sources.map((_, i) =>
+          [0, 1].map((i) =>
             rm(path.join(dir, `source-${i}.media`), { force: true }).catch(
               () => {},
             ),

@@ -3,6 +3,15 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { parseURL, LIMIT } from "./library.mjs";
 import { youtubeFailure } from "./youtube-errors.mjs";
+import { analyzeCobalt } from "./cobalt.mjs";
+export function youtubeProvider() {
+  const provider =
+    process.env.YOUTUBE_PROVIDER ||
+    (process.env.COBALT_URL ? "cobalt" : "yt-dlp");
+  if (!["cobalt", "yt-dlp"].includes(provider))
+    throw Error("YOUTUBE_PROVIDER는 cobalt 또는 yt-dlp여야 합니다.");
+  return provider;
+}
 const cache = new Map();
 let extracting = 0;
 export function youtubeMediaURL(value) {
@@ -100,6 +109,15 @@ export async function analyzeYoutube(id) {
     );
   extracting++;
   try {
+    if (youtubeProvider() === "cobalt") {
+      const entry = await analyzeCobalt(id);
+      entry.expires = Date.now() + 5 * 60000;
+      for (const [key, value] of cache)
+        if (value.expires < Date.now()) cache.delete(key);
+      if (cache.size >= 40) cache.delete(cache.keys().next().value);
+      cache.set(entry.info.id, entry);
+      return entry;
+    }
     const { stdout } = await promisify(execFile)(
       process.env.PYTHON_BIN || "python",
       [
@@ -174,6 +192,7 @@ export async function analyzeYoutube(id) {
     cache.set(info.id, entry);
     return entry;
   } catch (e) {
+    if (youtubeProvider() === "cobalt") throw e;
     throw youtubeFailure(e);
   } finally {
     extracting--;

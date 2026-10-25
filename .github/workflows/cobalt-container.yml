@@ -1,0 +1,35 @@
+name: Verify Cobalt container
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/cobalt, main]
+    paths:
+      [
+        Dockerfile.api,
+        "server/**",
+        scripts/container.mjs,
+        scripts/container-check.mjs,
+        ".github/workflows/cobalt-container.yml",
+      ]
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Build actual production container
+        run: docker build -f Dockerfile.api -t moadrop-cobalt:test .
+      - name: Start container
+        run: docker run -d --name moadrop-cobalt -e PORT=10000 -p 127.0.0.1:4105:10000 moadrop-cobalt:test
+      - name: Verify health and complete sample video and audio downloads
+        run: node scripts/container-check.mjs
+      - name: Diagnose actual YouTube download (network denial is reported separately)
+        run: node scripts/container-youtube-check.mjs
+      - name: Container logs
+        if: always()
+        run: docker logs --tail 120 moadrop-cobalt || true

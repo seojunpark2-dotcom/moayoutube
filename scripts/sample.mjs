@@ -15,7 +15,7 @@ await mkdir(path.join(ROOT, "thumbs"), { recursive: true });
 const run = promisify(execFile);
 const file = path.join(ROOT, "library", "studio.mp4");
 await run(
-  ffmpeg,
+  process.env.FFMPEG_PATH || ffmpeg,
   [
     "-hide_banner",
     "-loglevel",
@@ -48,7 +48,7 @@ await run(
   ],
   { timeout: 90000 },
 );
-await run(ffmpeg, [
+await run(process.env.FFMPEG_PATH || ffmpeg, [
   "-hide_banner",
   "-loglevel",
   "error",

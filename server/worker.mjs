@@ -7,11 +7,23 @@ import { youtubeMediaURL } from "./youtube.mjs";
 import { probeFile, LIMIT } from "./library.mjs";
 import { encodingOptions } from "./encoding.mjs";
 import { CONVERT_TIMEOUT_MS } from "./limits.mjs";
+import { requestCobalt, cobaltSession } from "./cobalt.mjs";
 const cfg = JSON.parse(process.argv[2]);
 function event(value) {
   process.stdout.write("transfer=" + JSON.stringify(value) + "\n");
 }
 try {
+  if (cfg.cobalt) {
+    const resolved = await requestCobalt(cfg.cobalt.id, {
+      quality: cfg.quality,
+      audio: cfg.format !== "mp4",
+    });
+    if (cfg.format === "mp4" && resolved.height !== cfg.quality)
+      throw Error(
+        "선택한 화질의 원본이 변경되었습니다. 링크를 다시 확인해 주세요.",
+      );
+    cfg.sources = resolved.sources;
+  }
   if (cfg.sources) {
     const controller = new AbortController(),
       states = cfg.sources.map(() => ({ received: 0, total: 0 }));
@@ -20,7 +32,9 @@ try {
     const tasks = cfg.sources.map(async (url, index) => {
       let session;
       try {
-        session = await safeSession(youtubeMediaURL(url), { connections: 8 });
+        session = cfg.cobalt
+          ? await cobaltSession(url)
+          : await safeSession(youtubeMediaURL(url), { connections: 8 });
         const file = path.join(
           path.dirname(cfg.output),
           `source-${index}.media`,
@@ -29,7 +43,8 @@ try {
           request: session.request,
           file,
           signal: controller.signal,
-          concurrency: 8,
+          concurrency: cfg.cobalt ? 1 : 8,
+          retries: cfg.cobalt ? 0 : 2,
           onProgress: (received, total) => {
             states[index] = { received, total };
             if (
@@ -78,6 +93,14 @@ try {
     second = cfg.audioInput ? await probeFile(cfg.audioInput) : first;
   const video = first.streams.find((s) => s.codec_type === "video"),
     audio = second.streams.find((s) => s.codec_type === "audio");
+  if (
+    !Number.isFinite(+first.format.duration) ||
+    +first.format.duration <= 0 ||
+    first.streams.length > 16 ||
+    second.streams.length > 16 ||
+    (video && video.width * video.height > 3840 * 2160)
+  )
+    throw Error("원본 파일의 길이 또는 미디어 규격을 확인하지 못했습니다.");
   const options = encodingOptions(cfg, video, audio);
   event({
     phase: "converting",
@@ -117,7 +140,7 @@ try {
     "-y",
     cfg.output,
   ];
-  const child = spawn(ffmpeg, args, {
+  const child = spawn(process.env.FFMPEG_PATH || ffmpeg, args, {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });

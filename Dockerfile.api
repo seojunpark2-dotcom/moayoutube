@@ -1,14 +1,19 @@
-FROM node:24-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
+# Official Cobalt 11 image, pinned to the reviewed immutable image index.
+FROM ghcr.io/imputnet/cobalt:11@sha256:28540f81d2cffbd9d089c08438e39a7689a7cee7e9a5b0f60de93a22d19f5dbe
+USER root
+RUN apk add --no-cache ffmpeg python3 py3-pip ca-certificates
+WORKDIR /opt/moadrop
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Use Alpine FFmpeg/FFprobe instead of platform-specific downloaded binaries.
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY requirements-youtube.txt ./
 RUN python3 -m pip install --no-cache-dir --target .tools/python -r requirements-youtube.txt
 COPY server ./server
-COPY scripts/sample.mjs ./scripts/sample.mjs
-ENV NODE_ENV=production API_HOST=0.0.0.0 PYTHON_BIN=python3
-RUN mkdir -p /app/.data && chown -R node:node /app
+COPY scripts/sample.mjs scripts/container.mjs ./scripts/
+ENV NODE_ENV=production API_HOST=0.0.0.0 PYTHON_BIN=python3 \
+    FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe \
+    YOUTUBE_PROVIDER=cobalt COBALT_URL=http://127.0.0.1:9000
+RUN mkdir -p .data && chown -R node:node /opt/moadrop
 USER node
 EXPOSE 4000
-CMD ["sh", "-c", "node scripts/sample.mjs && node server/index.mjs"]
+CMD ["node", "scripts/container.mjs"]
