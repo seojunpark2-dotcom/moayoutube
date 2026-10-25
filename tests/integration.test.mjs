@@ -143,6 +143,26 @@ test(
         await new Promise((r) => setTimeout(r, 200));
       }
       assert.ok(ready, logs);
+      for (const origin of [
+        "https://moayoutube.vercel.app",
+        "https://moayoutube-seojunpark2.vercel.app",
+        "https://moayoutube-hu8lnfe7e-seojunpark2.vercel.app",
+        "https://moayoutube-git-main-seojunpark2.vercel.app",
+        "https://other.vercel.app",
+      ]) {
+        const response = await fetch(base + "/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: origin },
+          body: JSON.stringify({
+            url: "https://sample.moadrop.local/studio-loop.mp4",
+          }),
+        });
+        assert.equal(
+          response.status,
+          origin === "https://other.vercel.app" ? 403 : 200,
+          origin,
+        );
+      }
       const analyzed = await post("/api/analyze", {
         url: "https://sample.moadrop.local/studio-loop.mp4",
       });

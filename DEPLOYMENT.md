@@ -31,7 +31,7 @@ Render에서는 Dockerfile Path를 `Dockerfile.api`, Health Check Path를 `/api/
 2. Root Directory는 저장소 루트, Framework는 Next.js, Node.js 버전은 24.x로 지정합니다.
 3. 환경 변수 **`API_ORIGIN=https://api.example.com`**을 실제 변환 서버 주소로 지정합니다. 경로 `/api`, 사용자명·비밀번호, 쿼리는 넣지 않습니다. 사용하는 Production/Preview 환경 각각에 지정합니다.
 4. Deploy 합니다. `vercel.json`이 설치·빌드 명령을 지정합니다. 프런트엔드 설치는 `--ignore-scripts`로 FFmpeg 바이너리 설치를 생략합니다. 백엔드 설치에는 이 옵션을 사용하지 마세요.
-5. 실제 웹 도메인이 정해지면 변환 서버의 `WEB_ORIGIN`을 일치시키고 API를 재시작합니다. Preview에서 작업 요청을 시험하려면 그 Preview 원점을 `WEB_ORIGIN`으로 설정한 별도 API 인스턴스를 사용하세요.
+5. 실제 웹 도메인이 정해지면 변환 서버의 `WEB_ORIGIN`을 일치시키고 API를 재시작합니다. v1.3.3부터 이 프로젝트의 `moayoutube.vercel.app`, 팀 별칭 및 `seojunpark2` 소속 `moayoutube`의 배포·브랜치 주소도 지원합니다. 다른 프로젝트나 다른 팀의 Vercel 주소는 허용하지 않습니다. Vercel의 미리보기 로그인 보호는 그대로 적용됩니다. 커스텀 도메인을 여러 개 사용한다면 `WEB_ORIGINS`에 쉼표로 구분해 지정할 수 있습니다. 포크를 다른 계정에 배포할 때는 `server/web-origins.mjs`의 프로젝트·팀 식별자를 변경하세요.
 
 프런트엔드는 분석·작업 생성·진행률 요청을 `/api` rewrite로 전달합니다. 완성 파일은 브라우저에서 변환 서버로 **직접 다운로드**하여 대용량 파일의 Vercel 경유 전송을 피합니다. 공개 파일 원점은 기본적으로 `API_ORIGIN`에서 빌드 시 생성되며, 필요한 경우 `NEXT_PUBLIC_DOWNLOAD_ORIGIN`으로 별도 지정할 수 있습니다. 이 주소는 브라우저에 노출되므로 비밀을 넣지 마세요. 원점 변경 후에는 Vercel을 다시 빌드해야 합니다. 일반 다운로드는 서버의 `Content-Disposition: attachment` 파일명을 사용하며 CORS fetch가 필요하지 않습니다.
 

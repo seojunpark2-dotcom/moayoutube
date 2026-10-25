@@ -8,6 +8,7 @@ import path from "node:path";
 import { analyzeYoutube, youtubeCached } from "./youtube.mjs";
 import { JOB_TIMEOUT_MS } from "./limits.mjs";
 import { jobKey } from "./job-key.mjs";
+import { isAllowedWebOrigin } from "./web-origins.mjs";
 import {
   hasStorage,
   freeDiskBytes,
@@ -40,15 +41,7 @@ app.use(express.json({ limit: "4kb" }));
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   res.set("X-Content-Type-Options", "nosniff");
-  if (
-    req.method === "POST" &&
-    req.headers.origin &&
-    ![
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      process.env.WEB_ORIGIN,
-    ].includes(req.headers.origin)
-  )
+  if (req.method === "POST" && !isAllowedWebOrigin(req.headers.origin))
     return res.status(403).json({ error: "허용되지 않은 요청 출처입니다." });
   next();
 });
