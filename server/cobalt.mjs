@@ -71,7 +71,9 @@ export function parseCobalt(data, id, origin = cobaltOrigin()) {
     data.isHLS ||
     !["merge", "audio"].includes(data.type) ||
     !Array.isArray(data.tunnel) ||
-    data.tunnel.length !== (data.type === "merge" ? 2 : 1)
+    (data.type === "merge"
+      ? data.tunnel.length !== 2
+      : ![1, 2].includes(data.tunnel.length))
   )
     throw Error(
       "Cobalt 응답 형식을 지원하지 않습니다. 일반 영상 원본 처리만 지원합니다.",
@@ -88,7 +90,9 @@ export function parseCobalt(data, id, origin = cobaltOrigin()) {
   )
     throw Error("Cobalt 원본 영상의 해상도를 확인하지 못했습니다.");
   return {
-    sources: data.tunnel.map((u) => cobaltTunnelURL(u, origin)),
+    sources: data.tunnel
+      .map((u) => cobaltTunnelURL(u, origin))
+      .slice(0, data.type === "merge" ? 2 : 1),
     expires: Date.now() + 60_000,
     height,
     width,

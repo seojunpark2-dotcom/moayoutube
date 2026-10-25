@@ -34,6 +34,11 @@ test(
           }),
         );
       } else {
+        assert.equal(
+          req.headers.range,
+          undefined,
+          "Cobalt 터널은 만료 전 한 번의 스트림 연결로 수신",
+        );
         res.writeHead(200, {
           "Content-Type": "video/mp4",
           "Content-Length": bytes.length,

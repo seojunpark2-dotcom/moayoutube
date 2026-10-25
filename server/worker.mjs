@@ -47,6 +47,7 @@ try {
           file,
           signal: controller.signal,
           concurrency: cfg.cobalt ? 1 : 8,
+          ranges: !cfg.cobalt,
           retries: cfg.cobalt ? 0 : 2,
           onProgress: (received, total) => {
             states[index] = { received, total };

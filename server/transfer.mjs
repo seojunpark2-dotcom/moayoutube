@@ -46,6 +46,7 @@ export async function transferToFile({
   signal,
   chunkSize = 8 * 1024 * 1024,
   concurrency = 4,
+  ranges = true,
   idleMs = DOWNLOAD_IDLE_MS,
   deadlineMs = DOWNLOAD_DEADLINE_MS,
   retries = 2,
@@ -102,7 +103,7 @@ export async function transferToFile({
       const response = await untilAbort(
         request({
           headers: {
-            Range: `bytes=${start}-${end}`,
+            ...(ranges ? { Range: `bytes=${start}-${end}` } : {}),
             "Accept-Encoding": "identity",
             ...(entityTag ? { "If-Range": entityTag } : {}),
           },
@@ -243,7 +244,7 @@ export async function transferToFile({
     aborted(controller.signal);
     handle = await open(file, "w+");
     let first = await getResponse(0, chunkSize - 1);
-    if (first.response.status === 206) {
+    if (first.response.status === 206 && ranges) {
       ranged = true;
       let range;
       try {

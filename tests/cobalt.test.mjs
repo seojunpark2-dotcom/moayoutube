@@ -37,6 +37,16 @@ test("Cobalt 주소와 터널은 고정 원점·경로만 허용", () => {
   ])
     assert.throws(() => cobaltTunnelURL(u, origin));
   assert.equal(parseCobalt(reply(), id, origin).height, 720);
+  const audio = {
+    ...reply(),
+    type: "audio",
+    output: { filename: `youtube_${id}_audio` },
+  };
+  assert.equal(
+    parseCobalt(audio, id, origin).sources.length,
+    1,
+    "표지 이미지 터널은 음원으로 내려받지 않음",
+  );
   assert.throws(() => parseCobalt(reply(), "abcdefghijk", origin));
   assert.throws(() => parseCobalt({ ...reply(), isHLS: true }, id, origin));
   assert.throws(() =>
