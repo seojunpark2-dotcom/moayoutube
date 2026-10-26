@@ -2,11 +2,11 @@
 
 이 저장소에는 웹 화면과 실제 변환 서버 코드가 모두 포함되어 있습니다. **Vercel에 저장소를 연결하는 것만으로 다운로드 서버까지 실행되지는 않습니다.**
 
-## v1.5.0: 기존 Render에서 Cobalt 사용
+## v1.5.1: 기존 Render에서 Cobalt 사용
 
 `Dockerfile.api`는 공식 Cobalt 11 이미지를 고정 digest로 사용합니다. 컨테이너 안에서 Cobalt는 `127.0.0.1:9000`, 사이트 API는 Render의 `PORT`에서 실행됩니다. 새 서비스·도메인·유료 다운로드 API 키가 필요하지 않습니다. Render의 Dockerfile Path는 `Dockerfile.api`, Docker Command는 빈 값, Health Check Path는 `/api/health`로 유지하고 최신 커밋을 배포하세요. 기존 Docker Command가 입력되어 있다면 반드시 지워야 번들 시작 스크립트가 실행됩니다.
 
-기존 환경변수 `PORT=10000`, `WEB_ORIGIN=https://moayoutube.vercel.app`은 유지합니다. `YOUTUBE_PROVIDER`·`COBALT_URL`을 별도로 설정했다면 삭제하여 이미지 기본값을 사용하세요. Vercel의 `API_ORIGIN=https://moayoutube.onrender.com`도 유지합니다. `/api/health`에서 `version: "1.5.0"`, `youtubeProvider: "cobalt"`를 확인할 수 있습니다.
+기존 환경변수 `PORT=10000`, `WEB_ORIGIN=https://moayoutube.vercel.app`은 유지합니다. `YOUTUBE_PROVIDER`·`COBALT_URL`을 별도로 설정했다면 삭제하여 이미지 기본값을 사용하세요. Vercel의 `API_ORIGIN=https://moayoutube.onrender.com`도 유지합니다. `/api/health`에서 `version: "1.5.1"`, `youtubeProvider: "cobalt"`를 확인할 수 있습니다.
 
 API가 Cobalt의 `local-processing` 원본 터널을 받아 작업 프로세스에서 내려받고 FFmpeg로 변환합니다. 화면은 MP3·MP4만 제공하며 MP3 96/128/256/320kbps를 선택합니다. 조회 시 선택한 음원 또는 영상 화질 하나만 Cobalt에 요청합니다. Cobalt가 반환한 실제 높이만 다운로드 화질에 표시하고 길이는 원본 수신 후 FFprobe로 검사합니다. Cobalt 제한은 5시간(18000초), 파일 한도는 2GiB입니다.
 

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -14,12 +14,40 @@ await mkdir(path.join(ROOT, "library"), { recursive: true });
 await mkdir(path.join(ROOT, "thumbs"), { recursive: true });
 const run = promisify(execFile);
 const file = path.join(ROOT, "library", "studio.mp4");
+if (process.env.REUSE_SAMPLE === "1") {
+  const saved = (await library()).find(
+    (item) => item.id === "studio" && item.file === "studio.mp4",
+  );
+  if (
+    saved &&
+    (await stat(file).then(
+      (s) => s.isFile() && s.size > 0,
+      () => false,
+    )) &&
+    (await stat(path.join(ROOT, "thumbs", "studio.jpg")).then(
+      (s) => s.isFile(),
+      () => false,
+    ))
+  ) {
+    try {
+      await inspect(file);
+      console.log("기존 검증 샘플을 재사용합니다.");
+      process.exit(0);
+    } catch {
+      /* Regenerate incomplete sample files. */
+    }
+  }
+}
 await run(
   process.env.FFMPEG_PATH || ffmpeg,
   [
     "-hide_banner",
     "-loglevel",
     "error",
+    "-filter_threads",
+    "1",
+    "-filter_complex_threads",
+    "1",
     "-f",
     "lavfi",
     "-i",
@@ -32,6 +60,8 @@ await run(
     "8",
     "-c:v",
     "libx264",
+    "-threads",
+    "2",
     "-preset",
     "fast",
     "-crf",
@@ -52,10 +82,16 @@ await run(process.env.FFMPEG_PATH || ffmpeg, [
   "-hide_banner",
   "-loglevel",
   "error",
+  "-threads",
+  "2",
+  "-filter_threads",
+  "1",
   "-i",
   file,
   "-frames:v",
   "1",
+  "-threads",
+  "2",
   "-update",
   "1",
   "-y",

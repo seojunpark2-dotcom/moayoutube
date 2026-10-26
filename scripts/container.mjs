@@ -70,6 +70,7 @@ if (!ready) {
   start(["server/index.mjs"]);
   const sample = spawn(process.execPath, ["scripts/sample.mjs"], {
     stdio: "inherit",
+    env: { ...process.env, REUSE_SAMPLE: "1" },
   });
   children.add(sample);
   sample.on("error", () => console.error("샘플을 생성하지 못했습니다."));
