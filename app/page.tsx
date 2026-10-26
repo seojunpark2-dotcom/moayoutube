@@ -61,6 +61,9 @@ function durationText(value: number, clock = false) {
 export default function Home() {
   const [connected, setConnected] = useState(false),
     [connecting, setConnecting] = useState(false);
+  const [setup, setSetup] = useState(false),
+    [setupExpired, setSetupExpired] = useState(false);
+  const resumeAfterSetup = useRef<(() => void) | null>(null);
   const [dark, setDark] = useState(false),
     [url, setUrl] = useState(""),
     [media, setMedia] = useState<Media | null>(null),
@@ -94,13 +97,45 @@ export default function Home() {
     try {
       await connectLocal();
       setConnected(true);
-    } catch (e) {
+      setSetup(false);
+      const resume = resumeAfterSetup.current;
+      resumeAfterSetup.current = null;
+      resume?.();
+    } catch {
       setConnected(false);
-      setError(e instanceof Error ? e.message : "연결에 실패했습니다.");
+      if (!setup) setSetupExpired(false);
+      setSetup(true);
     } finally {
       setConnecting(false);
     }
   }
+  useEffect(() => {
+    if (!setup) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout>;
+    const deadline = Date.now() + 180000;
+    async function detect() {
+      try {
+        await connectLocal();
+        if (cancelled) return;
+        setConnected(true);
+        setSetup(false);
+        setError("");
+        const resume = resumeAfterSetup.current;
+        resumeAfterSetup.current = null;
+        resume?.();
+      } catch {
+        if (cancelled) return;
+        if (Date.now() >= deadline) setSetupExpired(true);
+        else retry = setTimeout(detect, 2000);
+      }
+    }
+    retry = setTimeout(detect, 1500);
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+    };
+  }, [setup]);
   useEffect(() => {
     if (
       ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
@@ -129,8 +164,8 @@ export default function Home() {
       /* 테마 선택의 영구 저장은 선택 사항입니다. */
     }
   }
-  async function analyze(value = url, mode = tab) {
-    if (busy || loading || !connected) return;
+  async function analyze(value = url, mode = tab, connectionReady = false) {
+    if (busy || loading) return;
     setLoading(true);
     setError("");
     setMedia(null);
@@ -145,6 +180,21 @@ export default function Home() {
         throw Error("올바른 영상 URL을 입력해 주세요.");
       }
       if (u.protocol !== "https:") throw Error("HTTPS URL을 입력해 주세요.");
+      if (!connected && !connectionReady) {
+        setConnecting(true);
+        try {
+          await connectLocal();
+          setConnected(true);
+          setSetup(false);
+        } catch {
+          resumeAfterSetup.current = () => void analyze(value, mode, true);
+          setSetupExpired(false);
+          setSetup(true);
+          return;
+        } finally {
+          setConnecting(false);
+        }
+      }
       const m = await api("/api/analyze", {
         url: value,
         format: mode === "video" ? "mp4" : "mp3",
@@ -372,11 +422,14 @@ export default function Home() {
           <div className="local-connection" role="status">
             <div>
               <strong>
-                {connected ? "내 PC에 연결됨" : "로컬 프로그램 연결 필요"}
+                {connected
+                  ? "내 PC에 연결됨"
+                  : "링크를 입력하면 실행 환경을 확인합니다"}
               </strong>
               <p>
-                영상 다운로드와 변환은 이 PC의 인터넷·저장 공간을 사용합니다.
-                프로그램을 실행한 뒤 연결해 주세요.
+                {connected
+                  ? "다운로드와 변환은 이 PC에서 처리합니다. 이 화면에서 바로 이용하세요."
+                  : "실행 중인 프로그램은 자동으로 연결하고, 처음 이용할 때는 준비 방법을 안내합니다."}
               </p>
             </div>
             <div className="local-actions">
@@ -434,6 +487,47 @@ export default function Home() {
               </p>
             )}
           </div>
+          {setup && (
+            <section className="local-setup" aria-labelledby="setup-title">
+              <h2 id="setup-title">첫 실행 준비</h2>
+              <p>
+                브라우저는 PC 프로그램을 자동으로 설치하거나 실행할 수 없습니다.
+                처음 한 번 아래 순서로 준비해 주세요.
+              </p>
+              <ol>
+                <li>
+                  <a href={process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL}>
+                    Windows 실행 ZIP 받기
+                  </a>{" "}
+                  (약 107MB)
+                </li>
+                <li>ZIP 전체를 원하는 폴더에 압축 해제하세요.</li>
+                <li>
+                  <strong>모아드롭 실행.cmd</strong>를 더블클릭하세요.
+                  Node.js·Python·FFmpeg는 함께 들어 있습니다.
+                </li>
+              </ol>
+              <p>
+                이미 받았다면 실행만 하면 됩니다. Chrome·Edge가 로컬 네트워크
+                접근을 요청하면 허용해 주세요. Windows x64 PC에서 이용할 수
+                있습니다.
+              </p>
+              <p role="status">
+                {setupExpired
+                  ? "자동 연결 대기 시간이 끝났습니다. 프로그램을 실행한 뒤 ‘내 PC 연결하기’를 눌러 주세요."
+                  : "프로그램 실행을 기다리고 있습니다. 연결되면 입력한 링크의 정보 조회를 자동으로 이어갑니다."}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  resumeAfterSetup.current = null;
+                  setSetup(false);
+                }}
+              >
+                준비 안내 닫기
+              </button>
+            </section>
+          )}
           <div className="workspace-heading">
             <span className="step-label">
               01 <span>링크 입력</span>
@@ -456,7 +550,7 @@ export default function Home() {
                 placeholder="영상 링크를 여기에 붙여넣으세요"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                disabled={busy}
+                disabled={busy || setup}
                 type="url"
                 required
                 maxLength={2048}
@@ -465,7 +559,7 @@ export default function Home() {
                 type="button"
                 className="paste"
                 onClick={paste}
-                disabled={busy}
+                disabled={busy || setup}
                 aria-label="클립보드에서 붙여넣기"
               >
                 <Clipboard size={16} />
@@ -473,7 +567,7 @@ export default function Home() {
               </button>
               <button
                 className="analyze"
-                disabled={loading || busy || !connected}
+                disabled={loading || busy || connecting || setup}
               >
                 {loading ? (
                   <LoaderCircle className="spin" size={17} />
@@ -491,7 +585,7 @@ export default function Home() {
                   <select
                     aria-label="요청 파일 형식"
                     value={tab === "video" ? "mp4" : "mp3"}
-                    disabled={busy || loading}
+                    disabled={busy || loading || setup}
                     onChange={(e) => {
                       setTab(e.target.value === "mp4" ? "video" : "audio");
                       setMedia(null);
@@ -515,7 +609,7 @@ export default function Home() {
                         : "요청 음원 비트레이트"
                     }
                     value={tab === "video" ? quality : bitrate}
-                    disabled={busy || loading}
+                    disabled={busy || loading || setup}
                     onChange={(e) => {
                       if (tab === "video") setQuality(+e.target.value);
                       else setBitrate(+e.target.value);
@@ -545,7 +639,7 @@ export default function Home() {
           <div className="input-bottom">
             <span>YouTube 영상·음원 다운로드 · 공개 영상 지원</span>
             <button
-              disabled={busy || loading || !connected}
+              disabled={busy || loading || connecting || setup}
               className="sample-button"
               onClick={() => {
                 setUrl(SAMPLE);

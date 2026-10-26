@@ -824,6 +824,38 @@ footer > span:last-child {
   border: 0;
   cursor: pointer;
 }
+.local-setup {
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}
+.local-setup h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.local-setup p,
+.local-setup li {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.local-setup ol {
+  padding-left: 22px;
+}
+.local-setup a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.local-setup button {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
 .permission-note {
   font-size: 10px;
   color: var(--muted);
