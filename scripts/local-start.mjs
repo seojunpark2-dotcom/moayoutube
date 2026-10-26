@@ -68,7 +68,7 @@ for (let n = 0; n < 60; n++) {
       signal: AbortSignal.timeout(1000),
     });
     if (r.ok && (await r.json()).mode === "local-companion") {
-      console.log("모아드롭 로컬 프로그램이 실행되었습니다: " + url);
+      console.log("모아유튭 로컬 프로그램이 실행되었습니다: " + url);
       console.log("종료하려면 이 창에서 Ctrl+C를 누르세요.");
       openBrowser();
       break;

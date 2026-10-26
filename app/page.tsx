@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { POLL_TIMEOUT_MS } from "../server/limits.mjs";
-import { MP3_BITRATES, VIDEO_QUALITIES } from "../server/output-options.mjs";
+import { MP3_BITRATES } from "../server/output-options.mjs";
 import {
   connectLocal,
   localAPI as api,
@@ -75,7 +75,7 @@ export default function Home() {
     [media, setMedia] = useState<Media | null>(null),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(""),
-    [tab, setTab] = useState<"video" | "audio">("audio"),
+    [tab, setTab] = useState<"video" | "audio">("video"),
     [format, setFormat] = useState("mp3"),
     [quality, setQuality] = useState(720),
     [bitrate, setBitrate] = useState(128),
@@ -177,14 +177,14 @@ export default function Home() {
     const frame = document.createElement("iframe");
     frame.hidden = true;
     frame.dataset.moadropLaunch = "true";
-    frame.title = "모아드롭 프로그램 실행 요청";
+    frame.title = "모아유튭 프로그램 실행 요청";
     frame.src = "moadrop://open";
     document.body.appendChild(frame);
     setTimeout(() => frame.remove(), 30000);
     setSetupExpired(false);
     setLaunchAttempt((n) => n + 1);
   }
-  function analyzeFromClick(value = url, mode = tab) {
+  function analyzeFromClick(value = url, mode: "video" | "audio" = "video") {
     if (busy || loading || connecting) return;
     try {
       if (!connected && new URL(value.trim()).protocol === "https:")
@@ -357,17 +357,13 @@ export default function Home() {
   return (
     <>
       <header className="header">
-        <a href="/" className="brand" aria-label="모아드롭 홈">
+        <a href="/" className="brand" aria-label="모아유튭 홈">
           <span className="brand-mark">
             <ArrowDownToLine size={21} />
           </span>
-          모아드롭<span className="brand-en">moadrop</span>
+          모아유튭<span className="brand-en">moayoutube</span>
         </a>
         <nav>
-          <a href="#guide" className="guide-link">
-            이용 안내 <ArrowRight size={14} />
-          </a>
-          <span className="nav-divider" />
           <button
             className="theme"
             onClick={toggle}
@@ -451,74 +447,6 @@ export default function Home() {
           </div>
         </section>
         <section className="workspace" aria-label="영상 링크 분석">
-          <div className="local-connection" role="status">
-            <div>
-              <strong>
-                {connected
-                  ? "내 PC에 연결됨"
-                  : "링크를 입력하면 실행 환경을 확인합니다"}
-              </strong>
-              <p>
-                {connected
-                  ? "다운로드와 변환은 이 PC에서 처리합니다. 이 화면에서 바로 이용하세요."
-                  : "실행 중인 프로그램은 자동으로 연결하고, 처음 이용할 때는 준비 방법을 안내합니다."}
-              </p>
-            </div>
-            <div className="local-actions">
-              {connected && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    try {
-                      await api("/api/local/shutdown", {});
-                      setConnected(false);
-                      setFile("");
-                      setMessage("로컬 프로그램을 종료했습니다.");
-                    } catch (err) {
-                      setError(
-                        err instanceof Error
-                          ? err.message
-                          : "종료에 실패했습니다.",
-                      );
-                    }
-                  }}
-                >
-                  프로그램 종료
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={connect}
-                disabled={connecting || busy}
-              >
-                {connecting
-                  ? "연결 중…"
-                  : connected
-                    ? "연결 다시 확인"
-                    : "내 PC 연결하기"}
-              </button>
-              <a
-                href="http://127.0.0.1:47831/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                로컬 화면 열기
-              </a>
-              {process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL && (
-                <a href={process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL}>
-                  Windows 실행 파일 받기
-                </a>
-              )}
-            </div>
-            {!connected && (
-              <p className="quality-note">
-                로컬 프로그램이 없다면 먼저 실행 파일이 필요합니다.
-                Chrome·Edge에서 로컬 네트워크 접근을 요청하면 허용해 주세요.
-                모바일 기기에는 Windows 프로그램을 실행할 수 없습니다.
-              </p>
-            )}
-          </div>
           {setup && (
             <section className="local-setup" aria-labelledby="setup-title">
               <h2 id="setup-title">첫 실행 준비</h2>
@@ -546,7 +474,7 @@ export default function Home() {
               <p>
                 등록 후에는 링크 확인 버튼이 프로그램 실행을 요청합니다.
                 Chrome·Edge가 로컬 네트워크 접근을 요청하면 허용해 주세요. 실행
-                연결을 지원하지 않는 PC에서는 모아드롭 실행.cmd를 직접 켜세요.
+                연결을 지원하지 않는 PC에서는 모아유튭 실행.cmd를 직접 켜세요.
                 Windows x64용입니다.
               </p>
               <button type="button" onClick={launchLocal}>
@@ -618,63 +546,6 @@ export default function Home() {
                 )}
               </button>
             </div>
-            <div className="download-options request-options">
-              <label>
-                요청 파일 형식
-                <div className="select-wrap">
-                  <select
-                    aria-label="요청 파일 형식"
-                    value={tab === "video" ? "mp4" : "mp3"}
-                    disabled={busy || loading || setup}
-                    onChange={(e) => {
-                      setTab(e.target.value === "mp4" ? "video" : "audio");
-                      setMedia(null);
-                      setFile("");
-                      setMessage("");
-                    }}
-                  >
-                    <option value="mp3">MP3 음원</option>
-                    <option value="mp4">MP4 영상</option>
-                  </select>
-                  <ChevronDown size={15} />
-                </div>
-              </label>
-              <label>
-                {tab === "video" ? "요청 영상 화질" : "요청 음원 비트레이트"}
-                <div className="select-wrap">
-                  <select
-                    aria-label={
-                      tab === "video"
-                        ? "요청 영상 화질"
-                        : "요청 음원 비트레이트"
-                    }
-                    value={tab === "video" ? quality : bitrate}
-                    disabled={busy || loading || setup}
-                    onChange={(e) => {
-                      if (tab === "video") setQuality(+e.target.value);
-                      else setBitrate(+e.target.value);
-                      setMedia(null);
-                      setFile("");
-                      setMessage("");
-                    }}
-                  >
-                    {(tab === "video" ? VIDEO_QUALITIES : MP3_BITRATES).map(
-                      (n) => (
-                        <option key={n} value={n}>
-                          {n}
-                          {tab === "video" ? "p" : " kbps"}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                  <ChevronDown size={15} />
-                </div>
-              </label>
-              <p className="quality-note">
-                형식과 화질을 먼저 선택하세요. 실제로 제공되는 화질은 링크 확인
-                후 표시됩니다.
-              </p>
-            </div>
           </form>
           <div className="input-bottom">
             <span>YouTube 영상·음원 다운로드 · 공개 영상 지원</span>
@@ -723,7 +594,7 @@ export default function Home() {
                 <div className="media-text">
                   <span className="source-badge">{media.source}</span>
                   <h2>{media.title}</h2>
-                  <p>{media.author}</p>
+                  <p>{media.id === "studio" ? "모아유튭 스튜디오" : media.author}</p>
                   <div className="media-meta">
                     {media.duration
                       ? durationText(media.duration)
@@ -978,100 +849,77 @@ export default function Home() {
               )}
             </div>
           )}
-        </section>
-        <section className="features" id="guide">
-          <article>
-            <span className="feature-icon">
-              <Film size={21} />
-            </span>
-            <h3>선명한 영상 그대로</h3>
-            <p>
-              MP4로 간편하게 저장하세요.
-              <br />
-              원본 해상도 이내에서 선택할 수 있어요.
-            </p>
-            <span className="feature-caption">
-              MP4 <span>·</span> 최대 원본 화질
-            </span>
-          </article>
-          <article>
-            <span className="feature-icon">
-              <AudioLines size={22} />
-            </span>
-            <h3>소리만 담고 싶을 때</h3>
-            <p>
-              필요한 음원만 가볍게 추출하세요.
-              <br />
-              용도에 맞는 형식과 비트레이트로.
-            </p>
-            <span className="feature-caption">
-              MP3 <span>·</span> 96 / 128 / 256 / 320 kbps
-            </span>
-          </article>
-          <article>
-            <span className="feature-icon">
-              <ShieldCheck size={22} />
-            </span>
-            <h3>안심하고 사용하는 도구</h3>
-            <p>
-              공개 영상과 등록된 소스를 처리하고,
-              <br />
-              변환한 임시 파일은 자동 삭제해요.
-            </p>
-            <span className="feature-caption">
-              공개 소스 <span>·</span> URL 기록 최소화
-            </span>
-          </article>
-        </section>
-        <section className="howto">
-          <div>
-            <span className="section-kicker">이용 방법</span>
-            <h2>세 단계면 충분해요.</h2>
+          <div className="local-connection" role="status">
+            <div>
+              <strong>
+                {connected
+                  ? "내 PC에 연결됨"
+                  : "링크를 입력하면 실행 환경을 확인합니다"}
+              </strong>
+              <p>
+                {connected
+                  ? "다운로드와 변환은 이 PC에서 처리합니다. 이 화면에서 바로 이용하세요."
+                  : "실행 중인 프로그램은 자동으로 연결하고, 처음 이용할 때는 준비 방법을 안내합니다."}
+              </p>
+            </div>
+            <div className="local-actions">
+              {connected && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    try {
+                      await api("/api/local/shutdown", {});
+                      setConnected(false);
+                      setFile("");
+                      setMessage("로컬 프로그램을 종료했습니다.");
+                    } catch (err) {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "종료에 실패했습니다.",
+                      );
+                    }
+                  }}
+                >
+                  프로그램 종료
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={connect}
+                disabled={connecting || busy}
+              >
+                {connecting
+                  ? "연결 중…"
+                  : connected
+                    ? "연결 다시 확인"
+                    : "내 PC 연결하기"}
+              </button>
+              <a
+                href="http://127.0.0.1:47831/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                로컬 화면 열기
+              </a>
+              {process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL && (
+                <a href={process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL}>
+                  Windows 실행 파일 받기
+                </a>
+              )}
+            </div>
+            {!connected && (
+              <p className="quality-note">
+                로컬 프로그램이 없다면 먼저 실행 파일이 필요합니다.
+                Chrome·Edge에서 로컬 네트워크 접근을 요청하면 허용해 주세요.
+                모바일 기기에는 Windows 프로그램을 실행할 수 없습니다.
+              </p>
+            )}
           </div>
-          <ol>
-            <li>
-              <span>1</span>
-              <div>
-                <strong>링크 붙여넣기</strong>
-                <p>영상의 URL을 입력하세요.</p>
-              </div>
-            </li>
-            <li>
-              <span>2</span>
-              <div>
-                <strong>원하는 형식 선택</strong>
-                <p>영상 또는 음원을 선택하세요.</p>
-              </div>
-            </li>
-            <li>
-              <span>3</span>
-              <div>
-                <strong>내 기기에 저장</strong>
-                <p>변환이 끝나면 다운로드하세요.</p>
-              </div>
-            </li>
-          </ol>
         </section>
-        <div className="copyright">
-          <ShieldCheck size={18} />
-          <p>
-            창작자의 권리를 함께 지켜요.
-            <br />
-            <span>
-              콘텐츠 이용 시 저작권과 서비스 이용 조건을 준수해 주세요. 공개
-              YouTube 영상의 다운로드·음원 추출을 지원하며, 로그인·접근
-              제한·DRM은 우회하지 않습니다.
-            </span>
-          </p>
-        </div>
+        <div className="bottom-space" aria-hidden="true" />
       </main>
-      <footer>
-        <a href="/" className="footer-brand">
-          <ArrowDownToLine size={16} /> 모아드롭
-        </a>
-        <span>당신의 순간을, 당신의 방식으로.</span>
-        <span>© {new Date().getFullYear()} moadrop</span>
-      </footer>
     </>
   );
 }

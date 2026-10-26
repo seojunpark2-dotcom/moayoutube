@@ -27,18 +27,7 @@ try {
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(web);
     await connect(page);
-    assert.deepEqual(
-      await page
-        .locator('select[aria-label="요청 파일 형식"] option')
-        .evaluateAll((items) => items.map((o) => o.value)),
-      ["mp3", "mp4"],
-    );
-    assert.deepEqual(
-      await page
-        .locator('select[aria-label="요청 음원 비트레이트"] option')
-        .evaluateAll((items) => items.map((o) => o.value)),
-      ["96", "128", "256", "320"],
-    );
+    assert.equal(await page.locator(".request-options").count(), 0);
     await page.getByRole("button", { name: "샘플로 체험하기" }).click();
     await page
       .getByRole("heading", { name: "컬러 스튜디오 · 오리지널 테스트 필름" })
@@ -95,9 +84,6 @@ try {
     const page = await browser.newPage();
     await page.goto(web);
     await connect(page);
-    await page
-      .getByLabel("요청 파일 형식", { exact: true })
-      .selectOption("mp4");
     await page.getByLabel("영상 URL").fill(youtubeURL);
     await page.getByRole("button", { name: "링크 확인", exact: true }).click();
     await page.locator(".media-text h2").waitFor({ timeout: 60_000 });

@@ -20,9 +20,6 @@ try {
     });
     await page.goto(web);
     await page.getByLabel("영상 URL").fill(sample);
-    await page
-      .getByLabel("요청 음원 비트레이트", { exact: true })
-      .selectOption("256");
     await page.getByRole("button", { name: "링크 확인", exact: true }).click();
     await page
       .getByRole("heading", { name: "첫 실행 준비", exact: true })
@@ -50,9 +47,15 @@ try {
       .waitFor({ timeout: 15000 });
     assert.equal(analyses, 1);
     assert.equal(
-      await page.getByLabel("음원 비트레이트", { exact: true }).inputValue(),
-      "256",
+      await page
+        .getByRole("tab", { name: "영상 다운로드", exact: true })
+        .getAttribute("aria-selected"),
+      "true",
     );
+    await page.getByRole("tab", { name: "음원 다운로드", exact: true }).click();
+    await page
+      .getByLabel("음원 비트레이트", { exact: true })
+      .selectOption("256");
     // Analysis scrolls the result into view; allow that movement to settle before a pointer click.
     await page.waitForTimeout(500);
     const pending = page.waitForEvent("download");
@@ -61,7 +64,7 @@ try {
     assert.equal(await download.failure(), null);
     assert.match(download.suggestedFilename(), /\.mp3$/);
     console.log(
-      `${width}px: 준비 안내 → 프로그램 감지 → 입력한 URL·비트레이트 유지 → 실제 MP3 저장 통과`,
+      `${width}px: 준비 안내 → 프로그램 감지 → 입력한 URL 유지·기본 영상 탭·음원 전환 → 실제 MP3 저장 통과`,
     );
     await context.close();
   }
