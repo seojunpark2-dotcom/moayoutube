@@ -47,6 +47,7 @@ try {
           file,
           signal: controller.signal,
           concurrency: cfg.cobalt ? 1 : 8,
+          adaptive: !cfg.cobalt,
           ranges: !cfg.cobalt,
           retries: cfg.cobalt ? 0 : 2,
           onProgress: (received, total) => {
@@ -93,8 +94,11 @@ try {
     const failed = results.find((r) => r.status === "rejected");
     if (failed) throw failed.reason;
   }
-  const first = await probeFile(cfg.input),
-    second = cfg.audioInput ? await probeFile(cfg.audioInput) : first;
+  const [first, other] = await Promise.all([
+    probeFile(cfg.input),
+    cfg.audioInput ? probeFile(cfg.audioInput) : null,
+  ]);
+  const second = other || first;
   const video = first.streams.find((s) => s.codec_type === "video"),
     audio = second.streams.find((s) => s.codec_type === "audio");
   if (

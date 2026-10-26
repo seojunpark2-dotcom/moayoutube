@@ -51,6 +51,7 @@ try {
     await new Promise((r) => setTimeout(r, 100));
   }
   assert.equal(health?.youtubeProvider, "yt-dlp", logs);
+  assert.equal(health?.features?.progressiveAnalysis, true);
   const root = await fetch(url + "/");
   assert.equal(root.status, 200);
   assert.equal(root.headers.get("x-frame-options"), "DENY");

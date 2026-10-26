@@ -7,6 +7,25 @@ import { mkdirSync, existsSync } from "node:fs";
 import { mkdir, rm, stat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { analyzeYoutube, youtubeCached, youtubeProvider } from "./youtube.mjs";
+import { createAnalysisTasks } from "./analysis-tasks.mjs";
+import { analysisKey } from "./output-options.mjs";
+const analysisTasks = createAnalysisTasks({
+  extract: analyzeYoutube,
+  key: (id, options) =>
+    youtubeProvider() === "yt-dlp" ? id : analysisKey(id, options),
+  metadata: async (id) => {
+    const response = await fetch(
+      "https://www.youtube.com/oembed?format=json&url=" +
+        encodeURIComponent("https://www.youtube.com/watch?v=" + id),
+      {
+        signal: AbortSignal.timeout(10000),
+        redirect: "error",
+      },
+    );
+    if (!response.ok) throw Error("메타데이터 조회 실패");
+    return response.json();
+  },
+});
 import { JOB_TIMEOUT_MS } from "./limits.mjs";
 import { jobKey } from "./job-key.mjs";
 import { MP3_BITRATES, VIDEO_QUALITIES } from "./output-options.mjs";
@@ -111,6 +130,7 @@ app.get("/api/health", (_, res) =>
     mode: localMode ? "local-companion" : "server",
     protocol: 1,
     version: metadata.version,
+    features: { progressiveAnalysis: true, adaptiveTransfer: true },
     youtubeProvider: youtubeProvider(),
     active: [...jobs.values()].filter((j) => j.state === "processing").length,
   }),
@@ -180,34 +200,44 @@ app.post("/api/analyze", async (req, res) => {
     }
     const cached = youtubeCached("yt:" + id, { format, quality });
     if (cached) return res.json(cached.info);
-    const [streams, metadata] = await Promise.allSettled([
-      analyzeYoutube(id, { format, quality }),
-      (async () => {
-        const r = await fetch(
-          "https://www.youtube.com/oembed?format=json&url=" +
-            encodeURIComponent("https://www.youtube.com/watch?v=" + id),
-          { signal: AbortSignal.timeout(10000), redirect: "error" },
-        );
-        if (!r.ok) throw Error();
-        return r.json();
-      })(),
-    ]);
-    if (streams.status === "fulfilled") {
-      const entry = streams.value;
-      if (metadata.status === "fulfilled") {
-        entry.info.title = metadata.value.title;
-        entry.info.author = metadata.value.author_name;
+    const task = analysisTasks.get(id, { format, quality });
+    if (req.body.progressive === true) {
+      await Promise.race([task.promise, task.metadataPromise]);
+      if (task.state === "pending" && task.metadata) {
+        return res.json({
+          id: "yt:" + id,
+          title: task.metadata.title,
+          author: task.metadata.author_name,
+          thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          duration: null,
+          qualities: [],
+          downloadable: false,
+          convertible: false,
+          youtube: true,
+          analysisPending: true,
+          source: "YouTube · 공식 oEmbed",
+          permission: "실제 다운로드 형식을 확인하고 있습니다.",
+        });
+      }
+    }
+    await task.promise;
+    if (task.state === "ready") {
+      const entry = task.result;
+      if (task.metadata) {
+        entry.info.title = task.metadata.title;
+        entry.info.author = task.metadata.author_name;
         entry.title = entry.info.title;
       }
       return res.json(entry.info);
     }
-    const downloadError = streams.reason.message;
-    if (metadata.status !== "fulfilled") {
+    const downloadError = task.error.message;
+    await task.metadataPromise;
+    if (!task.metadata) {
       return res.status(422).json({
         error: downloadError,
       });
     }
-    const data = metadata.value;
+    const data = task.metadata;
     return res.json({
       id,
       title: data.title,
@@ -219,7 +249,7 @@ app.post("/api/analyze", async (req, res) => {
       downloadable: false,
       convertible: false,
       permission: downloadError,
-      downloadErrorCode: streams.reason.code || "YOUTUBE_UNSUPPORTED_FORMAT",
+      downloadErrorCode: task.error.code || "YOUTUBE_UNSUPPORTED_FORMAT",
       youtube: true,
     });
   }

@@ -87,6 +87,9 @@ try {
     await page.getByLabel("영상 URL").fill(youtubeURL);
     await page.getByRole("button", { name: "링크 확인", exact: true }).click();
     await page.locator(".media-text h2").waitFor({ timeout: 60_000 });
+    await page
+      .getByRole("tab", { name: "영상 다운로드", exact: true })
+      .waitFor({ timeout: 60_000 });
     assert.ok(
       await page.getByRole("tab", { name: "음원 다운로드" }).isEnabled(),
     );

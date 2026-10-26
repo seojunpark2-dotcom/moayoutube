@@ -91,6 +91,30 @@ test("4개 병렬 구간을 파일에 기록해 원본 바이트를 정확하게
   assert.ok(peak > 1 && peak <= 4);
   assert.equal(active, 0);
 });
+test("8MB보다 작은 파일도 크기에 맞춰 병렬 수신하고 바이트를 보존", async (t) => {
+  const data = Buffer.alloc(4 * 1024 * 1024, 73),
+    file = await target(t);
+  let active = 0,
+    peak = 0;
+  await transferToFile({
+    file,
+    adaptive: true,
+    concurrency: 8,
+    request: async ({ headers }) => {
+      const [a, b] = range(headers, data.length);
+      active++;
+      peak = Math.max(peak, active);
+      return response(data, a, b, {
+        part: 64 * 1024,
+        delay: 2,
+        onEnd: () => active--,
+      });
+    },
+  });
+  assert.ok(peak > 1 && peak <= 8);
+  assert.equal(active, 0);
+  assert.deepEqual(await readFile(file), data);
+});
 test("지속 수신은 전체 소요 시간이 유휴 제한보다 길어도 중단하지 않음", async (t) => {
   const data = payload.subarray(0, 512),
     file = await target(t),

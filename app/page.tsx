@@ -9,11 +9,8 @@ import {
   localDownload,
 } from "../lib/local-client";
 import {
-  ArrowDown,
   ArrowDownToLine,
   ArrowRight,
-  AudioLines,
-  Check,
   CheckCircle2,
   ChevronDown,
   Clipboard,
@@ -42,6 +39,7 @@ type Media = {
   size?: number;
   height?: number;
   youtube?: boolean;
+  analysisPending?: boolean;
   nativeAudioFormat?: "m4a" | "opus" | null;
 };
 const SAMPLE = "https://sample.moadrop.local/studio-loop.mp4";
@@ -69,6 +67,7 @@ export default function Home() {
   const [setup, setSetup] = useState(false),
     [setupExpired, setSetupExpired] = useState(false);
   const [launchAttempt, setLaunchAttempt] = useState(0);
+  const [fastLocal, setFastLocal] = useState(true);
   const resumeAfterSetup = useRef<(() => void) | null>(null);
   const [dark, setDark] = useState(false),
     [url, setUrl] = useState(""),
@@ -85,8 +84,7 @@ export default function Home() {
     [completedToken, setCompletedToken] = useState(""),
     [message, setMessage] = useState("");
   const [transferStats, setTransferStats] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null),
-    result = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     try {
       setDark(localStorage.getItem("moadrop-theme") === "dark");
@@ -97,11 +95,16 @@ export default function Home() {
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
+  async function connectToPC() {
+    const health = await connectLocal();
+    setFastLocal(health.features?.progressiveAnalysis === true);
+    return health;
+  }
   async function connect() {
     setConnecting(true);
     setError("");
     try {
-      await connectLocal();
+      await connectToPC();
       clearLaunchFrames();
       setConnected(true);
       setSetup(false);
@@ -123,7 +126,7 @@ export default function Home() {
     const deadline = Date.now() + 180000;
     async function detect() {
       try {
-        await connectLocal();
+        await connectToPC();
         if (cancelled) return;
         clearLaunchFrames();
         setConnected(true);
@@ -149,7 +152,7 @@ export default function Home() {
       ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
       window.location.port === "47831"
     ) {
-      connectLocal()
+      connectToPC()
         .then(() => setConnected(true))
         .catch(() => {});
     }
@@ -213,7 +216,7 @@ export default function Home() {
       if (!connectionReady) {
         setConnecting(true);
         try {
-          await connectLocal();
+          await connectToPC();
           clearLaunchFrames();
           setConnected(true);
           setSetup(false);
@@ -227,12 +230,23 @@ export default function Home() {
           setConnecting(false);
         }
       }
-      const m = await api("/api/analyze", {
-        url: value,
-        format: mode === "video" ? "mp4" : "mp3",
-        quality,
-        bitrate,
-      });
+      const requestInfo = () =>
+        api("/api/analyze", {
+          url: value,
+          progressive: true,
+          format: mode === "video" ? "mp4" : "mp3",
+          quality,
+          bitrate,
+        });
+      let m = await requestInfo();
+      const deadline = Date.now() + 60000;
+      while (m.analysisPending) {
+        setMedia(m);
+        if (Date.now() > deadline)
+          throw Error("화질 확인 시간이 초과되었습니다. 다시 시도해 주세요.");
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        m = await requestInfo();
+      }
       if (m.thumbnail?.startsWith("/api/")) {
         const thumbnail = await localFetch(m.thumbnail);
         if (thumbnail.ok)
@@ -246,16 +260,15 @@ export default function Home() {
         m.qualities.includes(quality) ? quality : m.qualities[0] || quality,
       );
       setTab(mode === "video" && m.qualities.length ? "video" : "audio");
-      setTimeout(
-        () =>
-          result.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          }),
-        100,
-      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "올바른 URL을 입력해 주세요.");
+      const reason =
+        e instanceof Error ? e.message : "올바른 URL을 입력해 주세요.";
+      setError(reason);
+      setMedia((current) =>
+        current?.analysisPending
+          ? { ...current, analysisPending: false, permission: reason }
+          : current,
+      );
     } finally {
       setLoading(false);
     }
@@ -356,96 +369,7 @@ export default function Home() {
   }
   return (
     <>
-      <header className="header">
-        <a href="/" className="brand" aria-label="모아유튭 홈">
-          <span className="brand-mark">
-            <ArrowDownToLine size={21} />
-          </span>
-          모아유튭<span className="brand-en">moayoutube</span>
-        </a>
-        <nav>
-          <button
-            className="theme"
-            onClick={toggle}
-            aria-label={dark ? "라이트 모드로 전환" : "다크 모드로 전환"}
-          >
-            {dark ? <Sun size={19} /> : <Moon size={19} />}
-          </button>
-        </nav>
-      </header>
-      <main>
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow">
-              <span /> 소장하고 싶은 순간을, 간편하게
-            </div>
-            <h1>
-              영상도, 소리도.
-              <br />
-              <span className="accent-word">
-                내게 맞는 형식으로.
-                <svg
-                  viewBox="0 0 480 16"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  <path d="M3 10 Q230 -5 477 9" />
-                </svg>
-              </span>
-            </h1>
-            <p className="intro">
-              링크 하나로 시작하세요.
-              <br className="mobile-break" /> 허용된 영상과 음원을
-              <br className="desktop-break" /> 원하는 형식으로 가볍게 저장할 수
-              있어요.
-            </p>
-            <div className="hero-pills">
-              <span>
-                <Check size={14} /> 회원가입 없이
-              </span>
-              <span>
-                <Check size={14} /> 광고 없이
-              </span>
-              <span>
-                <Check size={14} /> 필요한 기능만
-              </span>
-            </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <span className="orbit-dot" />
-            <div className="art-main">
-              <div className="art-top">
-                <span className="tiny-dot" /> 나의 순간을, 내 기기에.
-                <span>↗</span>
-              </div>
-              <div className="film-stack">
-                <div className="back-tile" />
-                <div className="film-tile">
-                  <Film size={55} strokeWidth={1.2} />
-                  <span>영상</span>
-                </div>
-                <div className="sound-tile">
-                  <AudioLines size={49} strokeWidth={1.5} />
-                  <span>음원</span>
-                </div>
-              </div>
-              <div className="art-bottom">
-                <span>링크</span>
-                <span className="dotted-line" />
-                <span className="art-arrow">
-                  <ArrowDown size={18} />
-                </span>
-                <span className="dotted-line" />
-                <span>내 파일</span>
-              </div>
-            </div>
-            <span className="float-tag">
-              <CheckCircle2 size={15} /> 준비 완료
-            </span>
-          </div>
-        </section>
+      <main className="fixed-shell" aria-label="모아유튭">
         <section className="workspace" aria-label="영상 링크 분석">
           {setup && (
             <section className="local-setup" aria-labelledby="setup-title">
@@ -500,9 +424,13 @@ export default function Home() {
             <span className="step-label">
               01 <span>링크 입력</span>
             </span>
-            <span className="secure-label">
-              <ShieldCheck size={14} /> 안전한 소스 확인
-            </span>
+            <button
+              className="theme"
+              onClick={toggle}
+              aria-label={dark ? "라이트 모드로 전환" : "다크 모드로 전환"}
+            >
+              {dark ? <Sun size={19} /> : <Moon size={19} />}
+            </button>
           </div>
           <form
             noValidate
@@ -572,14 +500,14 @@ export default function Home() {
               </button>
             </div>
           )}
-          {loading && (
+          {loading && !media && (
             <div className="loading" role="status">
               <LoaderCircle size={24} className="spin" /> 링크의 정보를 확인하고
               있어요.
             </div>
           )}
           {media && (
-            <div className="result" ref={result}>
+            <div className="result">
               <div className="media-info">
                 <div className="thumb">
                   <img
@@ -594,7 +522,9 @@ export default function Home() {
                 <div className="media-text">
                   <span className="source-badge">{media.source}</span>
                   <h2>{media.title}</h2>
-                  <p>{media.id === "studio" ? "모아유튭 스튜디오" : media.author}</p>
+                  <p>
+                    {media.id === "studio" ? "모아유튭 스튜디오" : media.author}
+                  </p>
                   <div className="media-meta">
                     {media.duration
                       ? durationText(media.duration)
@@ -605,7 +535,12 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              {media.downloadable ? (
+              {media.analysisPending ? (
+                <div className="analysis-wait" role="status">
+                  <LoaderCircle className="spin" size={18} /> 실제 화질과
+                  다운로드 형식을 준비하고 있습니다…
+                </div>
+              ) : media.downloadable ? (
                 <>
                   <div
                     className="tabs"
@@ -669,7 +604,15 @@ export default function Home() {
                             setMessage("");
                           }}
                         >
-                          {(tab === "video" ? ["mp4"] : ["mp3"]).map((f) => (
+                          {(tab === "video"
+                            ? ["mp4"]
+                            : [
+                                "mp3",
+                                ...(media.nativeAudioFormat
+                                  ? ["original"]
+                                  : []),
+                              ]
+                          ).map((f) => (
                             <option key={f} value={f}>
                               {f === "original"
                                 ? `원본 ${media.nativeAudioFormat?.toUpperCase()} · 가장 빠름`
@@ -840,7 +783,7 @@ export default function Home() {
                   <div>
                     <strong>
                       {media.youtube
-                        ? "이 서버에서 다운로드 연결에 실패했어요"
+                        ? "다운로드 정보를 확인하지 못했어요"
                         : "정보 조회만 가능한 링크예요"}
                     </strong>
                     <p>{media.permission}</p>
@@ -862,6 +805,12 @@ export default function Home() {
                   : "실행 중인 프로그램은 자동으로 연결하고, 처음 이용할 때는 준비 방법을 안내합니다."}
               </p>
             </div>
+            {connected && !fastLocal && (
+              <p className="quality-note">
+                더 빠른 정보 조회와 다운로드를 사용하려면 최신 Windows 실행
+                파일로 업데이트해 주세요.
+              </p>
+            )}
             <div className="local-actions">
               {connected && (
                 <button
@@ -918,7 +867,6 @@ export default function Home() {
             )}
           </div>
         </section>
-        <div className="bottom-space" aria-hidden="true" />
       </main>
     </>
   );

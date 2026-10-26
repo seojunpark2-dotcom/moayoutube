@@ -47,6 +47,7 @@ export async function transferToFile({
   chunkSize = 8 * 1024 * 1024,
   concurrency = 4,
   ranges = true,
+  adaptive = false,
   idleMs = DOWNLOAD_IDLE_MS,
   deadlineMs = DOWNLOAD_DEADLINE_MS,
   retries = 2,
@@ -195,20 +196,40 @@ export async function transferToFile({
   async function consume(session, start, end) {
     const reader = session.response.body.getReader();
     let cursor = start;
+    const buffer = Buffer.allocUnsafe(256 * 1024);
+    let buffered = 0;
+    async function flush() {
+      if (!buffered) return;
+      await write(buffer.subarray(0, buffered), cursor);
+      cursor += buffered;
+      received += buffered;
+      buffered = 0;
+      report();
+    }
     try {
       while (true) {
         session.reset();
         const { done, value } = await untilAbort(reader.read(), session.signal);
         if (done) break;
-        if (cursor + value.byteLength > end + 1)
+        if (cursor + buffered + value.byteLength > end + 1)
           throw failure("원본 서버가 요청한 범위보다 큰 파일을 보냈습니다.");
-        await write(value, cursor);
-        cursor += value.byteLength;
-        received += value.byteLength;
-        report();
+        let offset = 0;
+        while (offset < value.byteLength) {
+          const count = Math.min(
+            buffer.length - buffered,
+            value.byteLength - offset,
+          );
+          buffer.set(value.subarray(offset, offset + count), buffered);
+          buffered += count;
+          offset += count;
+          if (buffered === buffer.length) await flush();
+        }
       }
+      await flush();
       return cursor;
     } catch (e) {
+      // Preserve the exact committed cursor when retrying a short network response.
+      if (buffered && !controller.signal.aborted) await flush();
       e.cursor = cursor;
       throw e;
     } finally {
@@ -243,18 +264,24 @@ export async function transferToFile({
   try {
     aborted(controller.signal);
     handle = await open(file, "w+");
-    let first = await getResponse(0, chunkSize - 1);
+    const initialSize = adaptive ? Math.min(chunkSize, 1024 * 1024) : chunkSize;
+    let first = await getResponse(0, initialSize - 1);
     if (first.response.status === 206 && ranges) {
       ranged = true;
       let range;
       try {
-        range = rangeOf(first.response, 0, chunkSize - 1);
+        range = rangeOf(first.response, 0, initialSize - 1);
       } catch (e) {
         first.finish();
         await first.response.body.cancel().catch(() => {});
         throw e;
       }
       total = range.total;
+      if (adaptive)
+        chunkSize = Math.min(
+          chunkSize,
+          Math.max(512 * 1024, Math.ceil(total / (concurrency * 2))),
+        );
       report();
       await handle.truncate(total);
       let next = range.end + 1;
