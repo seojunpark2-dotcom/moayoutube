@@ -113,7 +113,8 @@ export default function Home() {
       resume?.();
     } catch {
       setConnected(false);
-      if (!setup) setSetupExpired(false);
+      setSetupExpired(false);
+      setLaunchAttempt((n) => n + 1);
       setSetup(true);
     } finally {
       setConnecting(false);
@@ -123,7 +124,8 @@ export default function Home() {
     if (!setup) return;
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout>;
-    const deadline = Date.now() + 180000;
+    const started = Date.now();
+    const deadline = started + 45000;
     async function detect() {
       try {
         await connectToPC();
@@ -138,10 +140,11 @@ export default function Home() {
       } catch {
         if (cancelled) return;
         if (Date.now() >= deadline) setSetupExpired(true);
-        else retry = setTimeout(detect, 2000);
+        else
+          retry = setTimeout(detect, Date.now() - started < 5000 ? 500 : 1500);
       }
     }
-    retry = setTimeout(detect, 1500);
+    retry = setTimeout(detect, 300);
     return () => {
       cancelled = true;
       clearTimeout(retry);
@@ -174,6 +177,12 @@ export default function Home() {
     } catch {
       /* 테마 선택의 영구 저장은 선택 사항입니다. */
     }
+  }
+  function cancelConnection() {
+    resumeAfterSetup.current = null;
+    setSetup(false);
+    setSetupExpired(false);
+    clearLaunchFrames();
   }
   function launchLocal() {
     // A fixed URI only: never send a video URL, command, or credentials to Windows.
@@ -371,55 +380,6 @@ export default function Home() {
     <>
       <main className="fixed-shell" aria-label="모아유튭">
         <section className="workspace" aria-label="영상 링크 분석">
-          {setup && (
-            <section className="local-setup" aria-labelledby="setup-title">
-              <h2 id="setup-title">첫 실행 준비</h2>
-              <p>
-                사이트에서 프로그램을 열려면 PC마다 처음 한 번 실행 연결을
-                등록해 주세요.
-              </p>
-              <ol>
-                <li>
-                  <a href={process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL}>
-                    Windows 실행 ZIP 받기
-                  </a>{" "}
-                  (약 107MB)
-                </li>
-                <li>ZIP 전체를 원하는 폴더에 압축 해제하세요.</li>
-                <li>
-                  <strong>사이트 연결 등록.cmd</strong>를 한 번 실행하세요.
-                  Node.js·Python·FFmpeg는 함께 들어 있습니다.
-                </li>
-                <li>
-                  아래 <strong>프로그램 실행</strong>을 누르고 브라우저의 열기
-                  요청을 허용하세요.
-                </li>
-              </ol>
-              <p>
-                등록 후에는 링크 확인 버튼이 프로그램 실행을 요청합니다.
-                Chrome·Edge가 로컬 네트워크 접근을 요청하면 허용해 주세요. 실행
-                연결을 지원하지 않는 PC에서는 모아유튭 실행.cmd를 직접 켜세요.
-                Windows x64용입니다.
-              </p>
-              <button type="button" onClick={launchLocal}>
-                프로그램 실행
-              </button>{" "}
-              <p role="status">
-                {setupExpired
-                  ? "자동 연결 대기 시간이 끝났습니다. 프로그램을 실행한 뒤 ‘내 PC 연결하기’를 눌러 주세요."
-                  : "프로그램 실행을 기다리고 있습니다. 연결되면 입력한 링크의 정보 조회를 자동으로 이어갑니다."}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  resumeAfterSetup.current = null;
-                  setSetup(false);
-                }}
-              >
-                준비 안내 닫기
-              </button>
-            </section>
-          )}
           <div className="workspace-heading">
             <span className="step-label">
               01 <span>링크 입력</span>
@@ -500,10 +460,41 @@ export default function Home() {
               </button>
             </div>
           )}
-          {loading && !media && (
-            <div className="loading" role="status">
-              <LoaderCircle size={24} className="spin" /> 링크의 정보를 확인하고
-              있어요.
+          {((loading && !media) || setup) && !setupExpired && (
+            <div
+              className="loading startup-loading"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <LoaderCircle size={24} className="spin" />
+              <span>로딩 중…</span>
+              {setup && (
+                <button
+                  type="button"
+                  aria-label="연결 대기 취소"
+                  onClick={cancelConnection}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          )}
+          {setup && setupExpired && (
+            <div className="error connection-error" role="alert">
+              <span>실행 프로그램에 연결하지 못했습니다.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  launchLocal();
+                }}
+              >
+                다시 시도
+              </button>
+              <button type="button" onClick={cancelConnection}>
+                취소
+              </button>
             </div>
           )}
           {media && (
@@ -797,12 +788,16 @@ export default function Home() {
               <strong>
                 {connected
                   ? "내 PC에 연결됨"
-                  : "링크를 입력하면 실행 환경을 확인합니다"}
+                  : setup
+                    ? "실행 환경 확인 중"
+                    : "링크를 입력하면 실행 환경을 확인합니다"}
               </strong>
               <p>
                 {connected
                   ? "다운로드와 변환은 이 PC에서 처리합니다. 이 화면에서 바로 이용하세요."
-                  : "실행 중인 프로그램은 자동으로 연결하고, 처음 이용할 때는 준비 방법을 안내합니다."}
+                  : setup
+                    ? "프로그램에 연결하고 있습니다."
+                    : "링크 확인을 누르면 프로그램 실행과 연결을 요청합니다."}
               </p>
             </div>
             {connected && !fastLocal && (
@@ -858,13 +853,6 @@ export default function Home() {
                 </a>
               )}
             </div>
-            {!connected && (
-              <p className="quality-note">
-                로컬 프로그램이 없다면 먼저 실행 파일이 필요합니다.
-                Chrome·Edge에서 로컬 네트워크 접근을 요청하면 허용해 주세요.
-                모바일 기기에는 Windows 프로그램을 실행할 수 없습니다.
-              </p>
-            )}
           </div>
         </section>
       </main>

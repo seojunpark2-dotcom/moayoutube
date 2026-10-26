@@ -1292,6 +1292,25 @@ main.fixed-shell {
   font-size: 13px;
   color: var(--muted);
 }
+.startup-loading {
+  padding: 24px 0;
+}
+.startup-loading button {
+  padding: 8px;
+  display: grid;
+  place-items: center;
+}
+.connection-error {
+  flex-wrap: wrap;
+}
+.connection-error > span {
+  flex: 1;
+  min-width: 150px;
+}
+.connection-error button {
+  font-size: 12px;
+  white-space: nowrap;
+}
 @media (max-width: 600px) {
   main.fixed-shell {
     padding: 10px;

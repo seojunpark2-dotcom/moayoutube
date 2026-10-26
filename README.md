@@ -1,6 +1,6 @@
 # 모아유튭
 
-## 현재 버전: 2.3.0 · 중앙 고정 화면과 빠른 조회
+## 현재 버전: 2.3.1 · 중앙 고정 화면과 빠른 조회
 
 기존 Render 다운로드 방식에서 **사용자별 로컬 실행 프로그램** 방식으로 변경했습니다. [Windows 실행 ZIP](https://github.com/seojunpark2-dotcom/moayoutube-local/releases/latest/download/moayoutube-local-windows-x64.zip)을 압축 해제한 뒤 **모아유튭 실행.cmd**를 실행하세요. 프로그램에 Node.js·Python·FFmpeg가 포함되며 자동으로 로컬 화면이 열립니다. 각 PC의 인터넷으로 원본을 받아 MP3·MP4를 생성합니다.
 
