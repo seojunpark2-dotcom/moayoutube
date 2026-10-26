@@ -27,6 +27,7 @@ try {
     await page
       .getByRole("heading", { name: "첫 실행 준비", exact: true })
       .waitFor();
+    assert.equal(await page.locator('iframe[src="moadrop://open"]').count(), 1);
     assert.equal(analyses, 0);
     assert.match(
       await page
@@ -92,6 +93,24 @@ try {
   console.log(
     "안내 취소 시 자동 작업 중단 / 프로그램 실행 중이면 링크 입력만으로 자동 연결 통과",
   );
+  available = false;
+  const previousFrames = await page
+    .locator('iframe[src="moadrop://open"]')
+    .count();
+  await page.getByRole("button", { name: "링크 확인", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "첫 실행 준비", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.locator('iframe[src="moadrop://open"]').count(),
+    previousFrames + 1,
+  );
+  available = true;
+  await page
+    .getByRole("heading", { name: "컬러 스튜디오 · 오리지널 테스트 필름" })
+    .waitFor();
+  assert.equal(analyses, 2);
+  console.log("연결 후 프로그램이 꺼진 경우에도 실행 요청·조회 자동 재개 통과");
   await context.close();
 } finally {
   await browser.close();

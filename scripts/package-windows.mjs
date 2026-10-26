@@ -55,6 +55,14 @@ await stat(path.join(exported, "index.html"));
 await copy(exported, "out");
 await copy("server", "server");
 await copy("scripts/local-start.mjs", "scripts/local-start.mjs");
+await copy("scripts/register-protocol.mjs", "scripts/register-protocol.mjs");
+await copy("scripts/protocol-launch.vbs", "scripts/protocol-launch.vbs");
+await copy("scripts/register-protocol.cmd", "사이트 연결 등록.cmd");
+await copy("scripts/unregister-protocol.cmd", "사이트 연결 해제.cmd");
+await writeFile(
+  path.join(dest, "사이트 연결 안내.txt"),
+  "사이트 버튼으로 실행하기\r\n\r\n1. ZIP 전체를 고정된 폴더에 압축 해제하세요.\r\n2. '사이트 연결 등록.cmd'를 한 번 실행하세요. 관리자 권한은 필요하지 않습니다.\r\n3. https://moayoutube.vercel.app 에서 URL을 입력하고 링크 확인을 누르세요.\r\n4. 브라우저의 프로그램 열기 및 로컬 네트워크 접근 요청을 허용하세요.\r\n\r\n등록 위치: 현재 사용자 HKCU\\Software\\Classes\\moadrop\r\n로그인 시 자동 실행은 설정하지 않습니다.\r\n폴더를 이동하면 다시 등록하세요. 해제는 '사이트 연결 해제.cmd'를 실행하세요.\r\n브라우저나 조직 정책으로 실행이 차단되면 '모아드롭 실행.cmd'를 직접 실행하세요.\r\n사이트의 프로그램 종료 버튼으로 백그라운드 프로그램을 종료할 수 있습니다.\r\n",
+);
 await copy("scripts/start-local.cmd", "모아드롭 실행.cmd");
 await writeFile(
   path.join(dest, "package.json"),

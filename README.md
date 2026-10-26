@@ -1,10 +1,12 @@
 # 모아드롭
 
-## 현재 버전: 2.0.0 · 사용자 PC에서 직접 처리
+## 현재 버전: 2.1.0 · 사이트 버튼으로 로컬 프로그램 실행
 
 기존 Render 다운로드 방식에서 **사용자별 로컬 실행 프로그램** 방식으로 변경했습니다. [Windows 실행 ZIP](https://github.com/seojunpark2-dotcom/moayoutube-local/releases/latest/download/moayoutube-local-windows-x64.zip)을 압축 해제한 뒤 **모아드롭 실행.cmd**를 실행하세요. 프로그램에 Node.js·Python·FFmpeg가 포함되며 자동으로 로컬 화면이 열립니다. 각 PC의 인터넷으로 원본을 받아 MP3·MP4를 생성합니다.
 
 공개 사이트는 로컬 프로그램에 연결하는 화면으로 사용합니다. 아래 v1.x의 Render/Cobalt 설명은 이전 구조의 기록입니다. 현재 설치·개발·배포 안내는 **[LOCAL-APP.md](LOCAL-APP.md)**를 먼저 확인하세요. 로컬 실행으로 모든 영상의 다운로드가 보장되는 것은 아니며 접근 제한은 우회하지 않습니다.
+
+ZIP 안의 **사이트 연결 등록.cmd**를 한 번 실행하면 공개 사이트의 **링크 확인** 버튼이 프로그램을 열고 조회를 이어갑니다. 브라우저의 프로그램 열기 확인은 허용해야 합니다. 관리자 권한이나 로그인 시 자동 실행은 사용하지 않습니다. 폴더를 이동하면 다시 등록하고, 연결 삭제는 **사이트 연결 해제.cmd**를 실행하세요.
 
 한국어 영상·음원 다운로드 웹앱. Next.js + TypeScript + Tailwind CSS 프런트엔드와 별도 Node.js/Express API, FFmpeg 자식 프로세스로 구성됩니다. 데이터베이스·회원가입·유료 API가 없습니다.
 

@@ -63,6 +63,7 @@ export default function Home() {
     [connecting, setConnecting] = useState(false);
   const [setup, setSetup] = useState(false),
     [setupExpired, setSetupExpired] = useState(false);
+  const [launchAttempt, setLaunchAttempt] = useState(0);
   const resumeAfterSetup = useRef<(() => void) | null>(null);
   const [dark, setDark] = useState(false),
     [url, setUrl] = useState(""),
@@ -135,7 +136,7 @@ export default function Home() {
       cancelled = true;
       clearTimeout(retry);
     };
-  }, [setup]);
+  }, [setup, launchAttempt]);
   useEffect(() => {
     if (
       ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
@@ -164,6 +165,27 @@ export default function Home() {
       /* 테마 선택의 영구 저장은 선택 사항입니다. */
     }
   }
+  function launchLocal() {
+    // A fixed URI only: never send a video URL, command, or credentials to Windows.
+    const frame = document.createElement("iframe");
+    frame.hidden = true;
+    frame.title = "모아드롭 프로그램 실행 요청";
+    frame.src = "moadrop://open";
+    document.body.appendChild(frame);
+    setTimeout(() => frame.remove(), 30000);
+    setSetupExpired(false);
+    setLaunchAttempt((n) => n + 1);
+  }
+  function analyzeFromClick(value = url, mode = tab) {
+    if (busy || loading || connecting) return;
+    try {
+      if (!connected && new URL(value.trim()).protocol === "https:")
+        launchLocal();
+    } catch {
+      /* Invalid URLs are explained by analyze(). */
+    }
+    void analyze(value, mode);
+  }
   async function analyze(value = url, mode = tab, connectionReady = false) {
     if (busy || loading) return;
     setLoading(true);
@@ -180,13 +202,14 @@ export default function Home() {
         throw Error("올바른 영상 URL을 입력해 주세요.");
       }
       if (u.protocol !== "https:") throw Error("HTTPS URL을 입력해 주세요.");
-      if (!connected && !connectionReady) {
+      if (!connectionReady) {
         setConnecting(true);
         try {
           await connectLocal();
           setConnected(true);
           setSetup(false);
         } catch {
+          if (connected) launchLocal();
           resumeAfterSetup.current = () => void analyze(value, mode, true);
           setSetupExpired(false);
           setSetup(true);
@@ -491,8 +514,8 @@ export default function Home() {
             <section className="local-setup" aria-labelledby="setup-title">
               <h2 id="setup-title">첫 실행 준비</h2>
               <p>
-                브라우저는 PC 프로그램을 자동으로 설치하거나 실행할 수 없습니다.
-                처음 한 번 아래 순서로 준비해 주세요.
+                사이트에서 프로그램을 열려면 PC마다 처음 한 번 실행 연결을
+                등록해 주세요.
               </p>
               <ol>
                 <li>
@@ -503,15 +526,23 @@ export default function Home() {
                 </li>
                 <li>ZIP 전체를 원하는 폴더에 압축 해제하세요.</li>
                 <li>
-                  <strong>모아드롭 실행.cmd</strong>를 더블클릭하세요.
+                  <strong>사이트 연결 등록.cmd</strong>를 한 번 실행하세요.
                   Node.js·Python·FFmpeg는 함께 들어 있습니다.
+                </li>
+                <li>
+                  아래 <strong>프로그램 실행</strong>을 누르고 브라우저의 열기
+                  요청을 허용하세요.
                 </li>
               </ol>
               <p>
-                이미 받았다면 실행만 하면 됩니다. Chrome·Edge가 로컬 네트워크
-                접근을 요청하면 허용해 주세요. Windows x64 PC에서 이용할 수
-                있습니다.
+                등록 후에는 링크 확인 버튼이 프로그램 실행을 요청합니다.
+                Chrome·Edge가 로컬 네트워크 접근을 요청하면 허용해 주세요. 실행
+                연결을 지원하지 않는 PC에서는 모아드롭 실행.cmd를 직접 켜세요.
+                Windows x64용입니다.
               </p>
+              <button type="button" onClick={launchLocal}>
+                프로그램 실행
+              </button>{" "}
               <p role="status">
                 {setupExpired
                   ? "자동 연결 대기 시간이 끝났습니다. 프로그램을 실행한 뒤 ‘내 PC 연결하기’를 눌러 주세요."
@@ -540,7 +571,7 @@ export default function Home() {
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              void analyze();
+              analyzeFromClick();
             }}
           >
             <div className="url-input">
@@ -643,7 +674,7 @@ export default function Home() {
               className="sample-button"
               onClick={() => {
                 setUrl(SAMPLE);
-                void analyze(SAMPLE, "video");
+                analyzeFromClick(SAMPLE, "video");
               }}
             >
               <Play size={12} fill="currentColor" /> 샘플로 체험하기{" "}
