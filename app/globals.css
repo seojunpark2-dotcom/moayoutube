@@ -785,6 +785,14 @@ footer > span:last-child {
   color: var(--muted);
   margin: 13px 0 0;
 }
+.request-options {
+  margin-top: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.request-options .quality-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
 .permission-note {
   font-size: 10px;
   color: var(--muted);

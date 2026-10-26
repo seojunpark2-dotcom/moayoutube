@@ -17,6 +17,18 @@ try {
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("http://localhost:3000");
+    assert.deepEqual(
+      await page
+        .locator('select[aria-label="요청 파일 형식"] option')
+        .evaluateAll((items) => items.map((o) => o.value)),
+      ["mp3", "mp4"],
+    );
+    assert.deepEqual(
+      await page
+        .locator('select[aria-label="요청 음원 비트레이트"] option')
+        .evaluateAll((items) => items.map((o) => o.value)),
+      ["96", "128", "256", "320"],
+    );
     await page.getByRole("button", { name: "샘플로 체험하기" }).click();
     await page
       .getByRole("heading", { name: "컬러 스튜디오 · 오리지널 테스트 필름" })
@@ -39,8 +51,8 @@ try {
     );
     await page.getByRole("tab", { name: "음원 다운로드" }).click();
     await page
-      .getByLabel("음원 비트레이트")
-      .selectOption(width === 390 ? "320" : width === 320 ? "128" : "192");
+      .getByLabel("음원 비트레이트", { exact: true })
+      .selectOption(width === 390 ? "320" : width === 320 ? "96" : "256");
     const downloaded = page.waitForEvent("download");
     await page.getByRole("button", { name: "다운로드", exact: true }).click();
     const download = await downloaded;
@@ -72,6 +84,9 @@ try {
   if (!process.argv.includes("--sample-only")) {
     const page = await browser.newPage();
     await page.goto("http://localhost:3000");
+    await page
+      .getByLabel("요청 파일 형식", { exact: true })
+      .selectOption("mp4");
     await page.getByLabel("영상 URL").fill(youtubeURL);
     await page.getByRole("button", { name: "링크 확인", exact: true }).click();
     await page.locator(".media-text h2").waitFor({ timeout: 60_000 });
@@ -79,7 +94,7 @@ try {
       await page.getByRole("tab", { name: "음원 다운로드" }).isEnabled(),
     );
     const qualityOptions = await page
-      .getByLabel("영상 화질")
+      .getByLabel("영상 화질", { exact: true })
       .locator("option")
       .allTextContents();
     assert.ok(qualityOptions.length > 0);

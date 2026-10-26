@@ -2,13 +2,15 @@
 
 이 저장소에는 웹 화면과 실제 변환 서버 코드가 모두 포함되어 있습니다. **Vercel에 저장소를 연결하는 것만으로 다운로드 서버까지 실행되지는 않습니다.**
 
-## v1.4.0: 기존 Render에서 Cobalt 사용
+## v1.5.0: 기존 Render에서 Cobalt 사용
 
 `Dockerfile.api`는 공식 Cobalt 11 이미지를 고정 digest로 사용합니다. 컨테이너 안에서 Cobalt는 `127.0.0.1:9000`, 사이트 API는 Render의 `PORT`에서 실행됩니다. 새 서비스·도메인·유료 다운로드 API 키가 필요하지 않습니다. Render의 Dockerfile Path는 `Dockerfile.api`, Docker Command는 빈 값, Health Check Path는 `/api/health`로 유지하고 최신 커밋을 배포하세요. 기존 Docker Command가 입력되어 있다면 반드시 지워야 번들 시작 스크립트가 실행됩니다.
 
-기존 환경변수 `PORT=10000`, `WEB_ORIGIN=https://moayoutube.vercel.app`은 유지합니다. `YOUTUBE_PROVIDER`·`COBALT_URL`을 별도로 설정했다면 삭제하여 이미지 기본값을 사용하세요. Vercel의 `API_ORIGIN=https://moayoutube.onrender.com`도 유지합니다. `/api/health`에서 `version: "1.4.0"`, `youtubeProvider: "cobalt"`를 확인할 수 있습니다.
+기존 환경변수 `PORT=10000`, `WEB_ORIGIN=https://moayoutube.vercel.app`은 유지합니다. `YOUTUBE_PROVIDER`·`COBALT_URL`을 별도로 설정했다면 삭제하여 이미지 기본값을 사용하세요. Vercel의 `API_ORIGIN=https://moayoutube.onrender.com`도 유지합니다. `/api/health`에서 `version: "1.5.0"`, `youtubeProvider: "cobalt"`를 확인할 수 있습니다.
 
-API가 Cobalt의 `local-processing` 원본 터널을 받아 기존 작업 프로세스에서 내려받고 FFmpeg로 변환합니다. Cobalt에 MP3 변환을 중복 요청하지 않으므로 기존 MP3 128/192/320, M4A, OPUS 메뉴가 유지됩니다. 원본 음원 복사는 Cobalt에서 정확한 원본 코덱을 조회하지 못하므로 표시하지 않습니다. 반환된 파일명에 포함된 실제 높이만 화질에 표시하며, 길이는 원본 파일 수신 후 FFprobe로 검사합니다. Cobalt 제한은 5시간(18000초), 기존 파일 한도는 2GiB입니다. 긴 영상은 낮은 화질 또는 음원을 사용하세요.
+API가 Cobalt의 `local-processing` 원본 터널을 받아 작업 프로세스에서 내려받고 FFmpeg로 변환합니다. 화면은 MP3·MP4만 제공하며 MP3 96/128/256/320kbps를 선택합니다. 조회 시 선택한 음원 또는 영상 화질 하나만 Cobalt에 요청합니다. Cobalt가 반환한 실제 높이만 다운로드 화질에 표시하고 길이는 원본 수신 후 FFprobe로 검사합니다. Cobalt 제한은 5시간(18000초), 파일 한도는 2GiB입니다.
+
+완료 파일은 최대 24시간·총 2GiB·18개 안에서 로컬 manifest와 함께 보관합니다. 기존 결과는 원본 조회 전에 확인합니다. 같은 디스크에서 프로세스가 다시 시작되면 정상 완료 파일만 복원하며 만료·손상 파일과 중단 작업은 정리합니다. Render 무료 임시 디스크의 수면·재배포 후 보존은 보장되지 않으므로 이 설정이 영구 저장소를 제공하는 것은 아닙니다. 추가 유료 디스크를 자동으로 생성하지 않습니다.
 
 공식 Cobalt 코드와 라이선스 파일은 이미지 `/app`에 그대로 유지됩니다. Cobalt API는 AGPL-3.0이며 출처·소스·라이선스는 [공식 저장소](https://github.com/imputnet/cobalt), [라이선스](https://github.com/imputnet/cobalt/blob/main/api/LICENSE)에 있습니다. 이 프로젝트는 별도 HTTP 어댑터를 사용하며 Cobalt 원본을 수정하지 않습니다. Cobalt 자체를 수정·배포할 때는 해당 라이선스 의무를 확인하세요.
 

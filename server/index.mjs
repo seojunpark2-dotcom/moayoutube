@@ -9,6 +9,13 @@ import path from "node:path";
 import { analyzeYoutube, youtubeCached, youtubeProvider } from "./youtube.mjs";
 import { JOB_TIMEOUT_MS } from "./limits.mjs";
 import { jobKey } from "./job-key.mjs";
+import { MP3_BITRATES, VIDEO_QUALITIES } from "./output-options.mjs";
+import {
+  restoreResults,
+  saveResult,
+  pruneResults,
+  RESULT_TTL_MS,
+} from "./result-cache.mjs";
 import { isAllowedWebOrigin } from "./web-origins.mjs";
 import {
   hasStorage,
@@ -27,16 +34,27 @@ import {
   inspect,
   probeFile,
 } from "./library.mjs";
+const testNamespace =
+  process.env.NODE_ENV === "test" &&
+  /^[a-f0-9-]{36}$/i.test(process.env.TEST_JOB_NAMESPACE || "")
+    ? process.env.TEST_JOB_NAMESPACE
+    : "";
 const app = express(),
   jobs = new Map(),
   TEMP = path.join(
     ROOT,
-    process.env.NODE_ENV === "test" ? "test-jobs" : "jobs",
+    process.env.NODE_ENV === "test"
+      ? "test-jobs" + (testNamespace ? "-" + testNamespace : "")
+      : "jobs",
   );
 await mkdir(TEMP, { recursive: true });
-// A restarted server never resumes a job; remove its orphaned files.
-for (const entry of await readdir(TEMP))
-  await rm(path.join(TEMP, entry), { recursive: true, force: true });
+// Restore only validated completed results. Interrupted jobs are never resumed.
+if (process.env.NODE_ENV === "test" && !testNamespace) {
+  for (const entry of await readdir(TEMP))
+    await rm(path.join(TEMP, entry), { recursive: true, force: true });
+} else {
+  for (const [token, job] of await restoreResults(TEMP)) jobs.set(token, job);
+}
 app.disable("x-powered-by");
 app.use(express.json({ limit: "4kb" }));
 app.use("/api", (req, res, next) => {
@@ -81,6 +99,15 @@ app.get("/api/thumbnail/:id", async (req, res) => {
   });
 });
 app.post("/api/analyze", async (req, res) => {
+  const { format = "mp4", quality = 720, bitrate = 128 } = req.body;
+  if (
+    !["mp3", "mp4", "m4a", "opus", "original"].includes(format) ||
+    (format === "mp4" && !VIDEO_QUALITIES.includes(quality)) ||
+    (format !== "mp4" && ![...MP3_BITRATES, 192].includes(bitrate))
+  )
+    return res
+      .status(400)
+      .json({ error: "요청한 파일 형식 또는 화질을 확인해 주세요." });
   const u = parseURL(
     typeof req.body.url === "string" ? req.body.url.trim() : req.body.url,
   );
@@ -88,10 +115,41 @@ app.post("/api/analyze", async (req, res) => {
   if (item) return res.json(publicInfo(item));
   const id = youtubeID(u);
   if (id) {
-    const cached = youtubeCached("yt:" + id);
+    const key = jobKey({ id: "yt:" + id, format, quality, bitrate });
+    const saved = [...jobs.values()].find(
+      (j) =>
+        j.key === key &&
+        j.state === "done" &&
+        Date.now() - j.completedAt < RESULT_TTL_MS,
+    );
+    if (
+      saved &&
+      (await stat(saved.output).then(
+        (s) => s.isFile(),
+        () => false,
+      ))
+    ) {
+      return res.json({
+        id: "yt:" + id,
+        title: saved.title,
+        author: saved.author || "저장된 결과",
+        thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        duration: saved.duration,
+        qualities: format === "mp4" ? [saved.height] : [],
+        height: saved.height,
+        downloadable: true,
+        convertible: format !== "mp4",
+        youtube: true,
+        cached: true,
+        nativeAudioFormat: null,
+        source: "YouTube · 저장된 결과",
+        permission: "검증된 완료 파일을 재사용합니다.",
+      });
+    }
+    const cached = youtubeCached("yt:" + id, { format, quality });
     if (cached) return res.json(cached.info);
     const [streams, metadata] = await Promise.allSettled([
-      analyzeYoutube(id),
+      analyzeYoutube(id, { format, quality }),
       (async () => {
         const r = await fetch(
           "https://www.youtube.com/oembed?format=json&url=" +
@@ -146,7 +204,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
       (j) =>
         j.key === key &&
         ["processing", "done"].includes(j.state) &&
-        (!j.completedAt || Date.now() - j.completedAt < 15 * 60000),
+        (!j.completedAt || Date.now() - j.completedAt < RESULT_TTL_MS),
     );
   }
   let existing = reusable();
@@ -163,10 +221,10 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
     return res.status(202).json({ token: existing.token, reused: true });
   let youtube =
     typeof id === "string" && /^yt:[\w-]{11}$/.test(id)
-      ? youtubeCached(id)
+      ? youtubeCached(id, req.body)
       : null;
   if (!youtube && typeof id === "string" && /^yt:[\w-]{11}$/.test(id))
-    youtube = await analyzeYoutube(id.slice(3));
+    youtube = await analyzeYoutube(id.slice(3), req.body);
   const item = youtube || (await library()).find((x) => x.id === id);
   if (typeof id === "string" && id.startsWith("yt:") && !youtube)
     return res.status(410).json({
@@ -193,7 +251,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
     format !== "mp4" &&
     (!item.allowConvert ||
       !item.media.audio ||
-      (format !== "original" && ![128, 192, 320].includes(bitrate)))
+      (format !== "original" && ![...MP3_BITRATES, 192].includes(bitrate)))
   )
     return res
       .status(400)
@@ -234,6 +292,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
     output,
     dir,
     title: item.title,
+    author: item.info?.author || item.author,
     format: outputFormat,
     phase: "preparing",
     child: null,
@@ -268,7 +327,7 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
                     ? youtube.selection.videos.get(quality)
                     : {
                         ...youtube.selection.audio,
-                        sources: youtube.selection.audio.sources.slice(1),
+                        sources: youtube.selection.audio.sources,
                       },
               }
             : undefined,
@@ -369,6 +428,9 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
           ),
         );
       job.state = "done";
+      job.duration = duration;
+      job.height =
+        actual.streams.find((s) => s.codec_type === "video")?.height || null;
       job.progress = 100;
     } catch {
       job.state = "error";
@@ -380,6 +442,12 @@ app.post("/api/jobs", jobLimit, async (req, res) => {
       () => JOB_RESERVATION_BYTES,
     );
     job.completedAt = Date.now();
+    if (job.state === "done") {
+      await saveResult(job).catch(() => {
+        /* Result remains downloadable in this process. */
+      });
+      await pruneResults(jobs).catch(() => {});
+    }
   }
   child.once("error", () => finish(1));
   child.once("close", (code) => finish(code));
@@ -416,14 +484,7 @@ app.get("/api/jobs/:token/file", (req, res) => {
   res.download(j.output, name, { dotfiles: "allow" });
 });
 const cleanup = setInterval(async () => {
-  for (const [token, j] of jobs)
-    if (
-      j.state !== "processing" &&
-      Date.now() - (j.completedAt || j.created) > 15 * 60000
-    ) {
-      jobs.delete(token);
-      await rm(j.dir, { recursive: true, force: true }).catch(() => {});
-    }
+  await pruneResults(jobs).catch(() => {});
 }, 60000);
 cleanup.unref();
 app.use((err, req, res, next) => {

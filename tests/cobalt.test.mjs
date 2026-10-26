@@ -74,13 +74,21 @@ test("Cobalt 인증·봇 확인 오류를 숨기지 않고 안전한 한국어 �
   );
 });
 test("실제 반환된 화질만 노출하고 요청한 가짜 화질은 추가하지 않음", async () => {
-  const m = await analyzeCobalt(id, async (_id, { quality }) =>
-    parseCobalt(reply(quality === 360 ? 360 : 720), id, origin),
+  let requests = 0;
+  const m = await analyzeCobalt(
+    id,
+    { format: "mp4", quality: 480 },
+    async (_id, { quality }) => {
+      requests++;
+      assert.equal(quality, 480);
+      return parseCobalt(reply(720), id, origin);
+    },
   );
-  assert.deepEqual(m.info.qualities, [720, 360]);
+  assert.equal(requests, 1, "선택한 형식과 화질만 한 번 조회");
+  assert.deepEqual(m.info.qualities, [720]);
   assert.equal(m.info.nativeAudioFormat, null);
   await assert.rejects(
-    analyzeCobalt(id, async () => {
+    analyzeCobalt(id, {}, async () => {
       throw Error("접근 거절");
     }),
     /접근 거절/,

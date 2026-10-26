@@ -181,32 +181,25 @@ export async function requestCobalt(
   }
 }
 
-export async function analyzeCobalt(id, request = requestCobalt) {
+export async function analyzeCobalt(id, options = {}, request = requestCobalt) {
+  const { format = "mp4", quality = 720 } = options;
+  const audio = format !== "mp4";
   const videos = new Map();
-  let first;
   const signal = AbortSignal.timeout(35000);
-  const results = await Promise.allSettled(
-    [720, 1080, 480, 360].map((quality) => request(id, { quality, signal })),
-  );
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue;
-    const item = result.value;
-    first ||= item;
-    // Cobalt can return its best quality when a requested tier is absent.
-    // Only advertise the actual dimensions in the classic filename.
-    if (item.height > 0 && item.height <= 1080) videos.set(item.height, item);
-  }
-  if (!videos.size)
-    throw (
-      results.find((r) => r.status === "rejected")?.reason ||
-      Error("Cobalt에서 지원하는 영상 화질을 찾지 못했습니다.")
-    );
+  const first = await request(id, { quality, audio, signal });
+  if (!audio && first.height > 0 && first.height <= 1080)
+    videos.set(first.height, first);
+  if (!audio && !videos.size)
+    throw Error("Cobalt에서 지원하는 영상 화질을 찾지 못했습니다.");
   return {
     provider: "cobalt",
     title: first.title,
     allowConvert: true,
     media: { duration: null, audio: true },
-    selection: { videos, audio: first },
+    selection: {
+      videos,
+      audio: { ...first, sources: first.sources.slice(audio ? 0 : 1) },
+    },
     info: {
       id: "yt:" + id,
       title: first.title,

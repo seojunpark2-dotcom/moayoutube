@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { pythonExecutable } from "../server/python.mjs";
 const result = spawnSync(
-  process.env.PYTHON_BIN || "python",
+  pythonExecutable(),
   [
     "-m",
     "pip",

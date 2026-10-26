@@ -2,7 +2,7 @@ name: Verify Cobalt container
 on:
   workflow_dispatch:
   push:
-    branches: [codex/cobalt, main]
+    branches: [codex/cobalt, codex/cnv-format-flow, main]
     paths:
       [
         Dockerfile.api,

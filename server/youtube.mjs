@@ -4,6 +4,8 @@ import { promisify } from "node:util";
 import { parseURL, LIMIT } from "./library.mjs";
 import { youtubeFailure } from "./youtube-errors.mjs";
 import { analyzeCobalt } from "./cobalt.mjs";
+import { analysisKey } from "./output-options.mjs";
+import { pythonExecutable } from "./python.mjs";
 export function youtubeProvider() {
   const provider =
     process.env.YOUTUBE_PROVIDER ||
@@ -92,16 +94,30 @@ export function selectYoutube(data) {
     );
   return { duration: data.duration, audio: audio || muxed, mp4Audio, videos };
 }
-export function youtubeCached(id) {
-  const entry = cache.get(id);
+export function youtubeCached(id, options = {}) {
+  const key = youtubeProvider() === "cobalt" ? analysisKey(id, options) : id;
+  const entry = cache.get(key);
   if (entry && entry.expires > Date.now()) return entry;
-  if (entry) cache.delete(id);
+  if (entry) cache.delete(key);
+  if (
+    youtubeProvider() === "cobalt" &&
+    options.format &&
+    options.format !== "mp4"
+  ) {
+    for (const value of cache.values())
+      if (
+        value.info.id === id &&
+        value.expires > Date.now() &&
+        value.selection.audio.sources.length
+      )
+        return value;
+  }
   return null;
 }
-export async function analyzeYoutube(id) {
+export async function analyzeYoutube(id, options = {}) {
   if (!/^[\w-]{11}$/.test(id))
     throw Error("올바른 YouTube 영상 ID가 아닙니다.");
-  const cached = youtubeCached("yt:" + id);
+  const cached = youtubeCached("yt:" + id, options);
   if (cached) return cached;
   if (extracting >= 2)
     throw Error(
@@ -110,16 +126,16 @@ export async function analyzeYoutube(id) {
   extracting++;
   try {
     if (youtubeProvider() === "cobalt") {
-      const entry = await analyzeCobalt(id);
+      const entry = await analyzeCobalt(id, options);
       entry.expires = Date.now() + 5 * 60000;
       for (const [key, value] of cache)
         if (value.expires < Date.now()) cache.delete(key);
       if (cache.size >= 40) cache.delete(cache.keys().next().value);
-      cache.set(entry.info.id, entry);
+      cache.set(analysisKey(entry.info.id, options), entry);
       return entry;
     }
     const { stdout } = await promisify(execFile)(
-      process.env.PYTHON_BIN || "python",
+      pythonExecutable(),
       [
         "-m",
         "yt_dlp",

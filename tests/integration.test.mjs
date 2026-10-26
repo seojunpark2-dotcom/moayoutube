@@ -202,12 +202,18 @@ test(
         400,
       );
       await mkdir(".data/test-output", { recursive: true });
-      for (const format of ["mp4", "mp3", "m4a", "opus"]) {
+      for (const [format, bitrate] of [
+        ["mp4", 192],
+        ["mp3", 96],
+        ["mp3", 256],
+        ["m4a", 192],
+        ["opus", 192],
+      ]) {
         const response = await post("/api/jobs", {
           id: media.id,
           format,
           quality: 360,
-          bitrate: 192,
+          bitrate,
         });
         assert.equal(response.status, 202);
         const { token } = await response.json();
@@ -237,6 +243,13 @@ test(
         const info = JSON.parse(stdout);
         assert.ok(+info.format.duration > 7);
         assert.ok(info.streams.some((s) => s.codec_type === "audio"));
+        if (format === "mp3")
+          assert.ok(
+            Math.abs(
+              +info.streams.find((s) => s.codec_type === "audio").bit_rate -
+                bitrate * 1000,
+            ) < 1000,
+          );
         if (format === "mp4")
           assert.equal(
             info.streams.find((s) => s.codec_type === "video").height,

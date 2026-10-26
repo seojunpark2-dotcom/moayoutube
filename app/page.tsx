@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { POLL_TIMEOUT_MS } from "../server/limits.mjs";
+import { MP3_BITRATES, VIDEO_QUALITIES } from "../server/output-options.mjs";
 import {
   ArrowDown,
   ArrowDownToLine,
@@ -52,17 +53,29 @@ function durationText(value: number, clock = false) {
         : `${seconds}초`;
 }
 async function api(url: string, body?: unknown) {
-  const r = await fetch(
-    url,
-    body
+  const r = await fetch(url, {
+    ...(body
       ? {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
-      : undefined,
-  );
-  const data = await r.json();
+      : {}),
+    // Bounds one control request, not the asynchronous conversion job.
+    signal: AbortSignal.timeout(90_000),
+  }).catch(() => {
+    throw Error(
+      "변환 서버 연결이 지연되거나 끊어졌습니다. 잠시 후 다시 시도해 주세요.",
+    );
+  });
+  let data;
+  try {
+    data = await r.json();
+  } catch {
+    throw Error(
+      "변환 서버가 정상 응답을 반환하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    );
+  }
   if (!r.ok) throw Error(data.error || "요청을 처리하지 못했습니다.");
   return data;
 }
@@ -72,10 +85,10 @@ export default function Home() {
     [media, setMedia] = useState<Media | null>(null),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(""),
-    [tab, setTab] = useState<"video" | "audio">("video"),
+    [tab, setTab] = useState<"video" | "audio">("audio"),
     [format, setFormat] = useState("mp3"),
     [quality, setQuality] = useState(720),
-    [bitrate, setBitrate] = useState(192),
+    [bitrate, setBitrate] = useState(128),
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
     [file, setFile] = useState(""),
@@ -104,7 +117,7 @@ export default function Home() {
       /* 테마 선택의 영구 저장은 선택 사항입니다. */
     }
   }
-  async function analyze(value = url) {
+  async function analyze(value = url, mode = tab) {
     if (busy || loading) return;
     setLoading(true);
     setError("");
@@ -119,13 +132,20 @@ export default function Home() {
         throw Error("올바른 영상 URL을 입력해 주세요.");
       }
       if (u.protocol !== "https:") throw Error("HTTPS URL을 입력해 주세요.");
-      const m = await api("/api/analyze", { url: value });
+      const m = await api("/api/analyze", {
+        url: value,
+        format: mode === "video" ? "mp4" : "mp3",
+        quality,
+        bitrate,
+      });
       setMedia(m);
       setFormat((current) =>
         current === "original" && !m.nativeAudioFormat ? "mp3" : current,
       );
-      setQuality(m.qualities[0] || 720);
-      setTab(m.qualities.length ? "video" : "audio");
+      setQuality(
+        m.qualities.includes(quality) ? quality : m.qualities[0] || quality,
+      );
+      setTab(mode === "video" && m.qualities.length ? "video" : "audio");
       setTimeout(
         () =>
           result.current?.scrollIntoView({
@@ -380,6 +400,63 @@ export default function Home() {
                 )}
               </button>
             </div>
+            <div className="download-options request-options">
+              <label>
+                요청 파일 형식
+                <div className="select-wrap">
+                  <select
+                    aria-label="요청 파일 형식"
+                    value={tab === "video" ? "mp4" : "mp3"}
+                    disabled={busy || loading}
+                    onChange={(e) => {
+                      setTab(e.target.value === "mp4" ? "video" : "audio");
+                      setMedia(null);
+                      setFile("");
+                      setMessage("");
+                    }}
+                  >
+                    <option value="mp3">MP3 음원</option>
+                    <option value="mp4">MP4 영상</option>
+                  </select>
+                  <ChevronDown size={15} />
+                </div>
+              </label>
+              <label>
+                {tab === "video" ? "요청 영상 화질" : "요청 음원 비트레이트"}
+                <div className="select-wrap">
+                  <select
+                    aria-label={
+                      tab === "video"
+                        ? "요청 영상 화질"
+                        : "요청 음원 비트레이트"
+                    }
+                    value={tab === "video" ? quality : bitrate}
+                    disabled={busy || loading}
+                    onChange={(e) => {
+                      if (tab === "video") setQuality(+e.target.value);
+                      else setBitrate(+e.target.value);
+                      setMedia(null);
+                      setFile("");
+                      setMessage("");
+                    }}
+                  >
+                    {(tab === "video" ? VIDEO_QUALITIES : MP3_BITRATES).map(
+                      (n) => (
+                        <option key={n} value={n}>
+                          {n}
+                          {tab === "video" ? "p" : " kbps"}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                  <ChevronDown size={15} />
+                </div>
+              </label>
+              <p className="quality-note">
+                형식과 화질을 먼저 선택하세요. 실제로 제공되는 화질은 링크 확인
+                후 표시됩니다.
+              </p>
+            </div>
           </form>
           <div className="input-bottom">
             <span>YouTube 영상·음원 다운로드 · 공개 영상 지원</span>
@@ -388,7 +465,7 @@ export default function Home() {
               className="sample-button"
               onClick={() => {
                 setUrl(SAMPLE);
-                void analyze(SAMPLE);
+                void analyze(SAMPLE, "video");
               }}
             >
               <Play size={12} fill="currentColor" /> 샘플로 체험하기{" "}
@@ -449,9 +526,17 @@ export default function Home() {
                     <button
                       role="tab"
                       aria-selected={tab === "video"}
-                      disabled={busy || !media.qualities.length}
+                      disabled={
+                        busy ||
+                        loading ||
+                        (!media.qualities.length && !media.youtube)
+                      }
                       className={tab === "video" ? "selected" : ""}
                       onClick={() => {
+                        if (!media.qualities.length && media.youtube) {
+                          void analyze(url, "video");
+                          return;
+                        }
                         setTab("video");
                         setFile("");
                         setMessage("");
@@ -487,17 +572,7 @@ export default function Home() {
                             setMessage("");
                           }}
                         >
-                          {(tab === "video"
-                            ? ["mp4"]
-                            : [
-                                ...(media.nativeAudioFormat
-                                  ? ["original"]
-                                  : []),
-                                "mp3",
-                                "m4a",
-                                "opus",
-                              ]
-                          ).map((f) => (
+                          {(tab === "video" ? ["mp4"] : ["mp3"]).map((f) => (
                             <option key={f} value={f}>
                               {f === "original"
                                 ? `원본 ${media.nativeAudioFormat?.toUpperCase()} · 가장 빠름`
@@ -554,7 +629,7 @@ export default function Home() {
                                   : ""}
                               </option>
                             ) : (
-                              [128, 192, 320].map((b) => (
+                              MP3_BITRATES.map((b) => (
                                 <option key={b} value={b}>
                                   {b} kbps
                                 </option>
@@ -627,7 +702,8 @@ export default function Home() {
                             {transferStats}
                           </span>
                         )}
-                        완료 파일은 약 15분 후 자동 삭제됩니다.
+                        완료 파일은 최대 24시간 보관하며, 저장 공간이 부족하면
+                        먼저 삭제될 수 있습니다.
                       </small>
                     </div>
                   )}
@@ -682,7 +758,7 @@ export default function Home() {
               용도에 맞는 형식과 비트레이트로.
             </p>
             <span className="feature-caption">
-              MP3 <span>·</span> M4A <span>·</span> OPUS
+              MP3 <span>·</span> 96 / 128 / 256 / 320 kbps
             </span>
           </article>
           <article>
