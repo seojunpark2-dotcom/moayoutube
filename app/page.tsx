@@ -45,6 +45,11 @@ type Media = {
   nativeAudioFormat?: "m4a" | "opus" | null;
 };
 const SAMPLE = "https://sample.moadrop.local/studio-loop.mp4";
+function clearLaunchFrames() {
+  document
+    .querySelectorAll("iframe[data-moadrop-launch]")
+    .forEach((frame) => frame.remove());
+}
 function durationText(value: number, clock = false) {
   const n = Math.max(0, Math.round(value)),
     hours = Math.floor(n / 3600),
@@ -97,6 +102,7 @@ export default function Home() {
     setError("");
     try {
       await connectLocal();
+      clearLaunchFrames();
       setConnected(true);
       setSetup(false);
       const resume = resumeAfterSetup.current;
@@ -119,6 +125,7 @@ export default function Home() {
       try {
         await connectLocal();
         if (cancelled) return;
+        clearLaunchFrames();
         setConnected(true);
         setSetup(false);
         setError("");
@@ -169,6 +176,7 @@ export default function Home() {
     // A fixed URI only: never send a video URL, command, or credentials to Windows.
     const frame = document.createElement("iframe");
     frame.hidden = true;
+    frame.dataset.moadropLaunch = "true";
     frame.title = "모아드롭 프로그램 실행 요청";
     frame.src = "moadrop://open";
     document.body.appendChild(frame);
@@ -206,6 +214,7 @@ export default function Home() {
         setConnecting(true);
         try {
           await connectLocal();
+          clearLaunchFrames();
           setConnected(true);
           setSetup(false);
         } catch {

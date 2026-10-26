@@ -53,6 +53,8 @@ try {
       await page.getByLabel("음원 비트레이트", { exact: true }).inputValue(),
       "256",
     );
+    // Analysis scrolls the result into view; allow that movement to settle before a pointer click.
+    await page.waitForTimeout(500);
     const pending = page.waitForEvent("download");
     await page.getByRole("button", { name: "다운로드", exact: true }).click();
     const download = await pending;
