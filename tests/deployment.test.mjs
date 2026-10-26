@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 function config(extra = {}) {
   const env = { ...process.env };
-  for (const key of ["VERCEL", "API_ORIGIN", "NEXT_PUBLIC_DOWNLOAD_ORIGIN"])
+  for (const key of [
+    "VERCEL",
+    "API_ORIGIN",
+    "NEXT_PUBLIC_DOWNLOAD_ORIGIN",
+    "COMPANION_DOWNLOAD_URL",
+  ])
     delete env[key];
   return JSON.parse(
     execFileSync(
@@ -11,7 +16,7 @@ function config(extra = {}) {
       [
         "--input-type=module",
         "-e",
-        'import c from "./next.config.mjs"; console.log(JSON.stringify({env:c.env,routes:await c.rewrites()}));',
+        'import c from "./next.config.mjs"; console.log(JSON.stringify({env:c.env,routes:await c.rewrites?.()||[]}));',
       ],
       {
         env: { ...env, ...extra },
@@ -22,40 +27,22 @@ function config(extra = {}) {
     ),
   );
 }
-test("로컬 프록시는 유지하고 배포 다운로드는 API HTTPS 원점으로 직접 연결", () => {
+test("Vercel과 로컬 모두 클라우드 API 프록시를 사용하지 않음", () => {
   const local = config();
-  assert.equal(local.env.NEXT_PUBLIC_DOWNLOAD_ORIGIN, "");
-  assert.equal(local.routes[0].destination, "http://127.0.0.1:4000/api/:path*");
+  assert.deepEqual(local.routes, []);
   const deployed = config({
     VERCEL: "1",
     API_ORIGIN: "https://api.example.com/",
   });
-  assert.equal(
-    deployed.env.NEXT_PUBLIC_DOWNLOAD_ORIGIN,
-    "https://api.example.com",
-  );
-  assert.equal(
-    deployed.routes[0].destination,
-    "https://api.example.com/api/:path*",
-  );
-  assert.equal(
-    config({
-      VERCEL: "1",
-      API_ORIGIN: "https://api.example.com",
-      NEXT_PUBLIC_DOWNLOAD_ORIGIN: "https://files.example.com",
-    }).env.NEXT_PUBLIC_DOWNLOAD_ORIGIN,
-    "https://files.example.com",
-  );
+  assert.deepEqual(deployed.routes, []);
+  assert.equal(deployed.env.NEXT_PUBLIC_DOWNLOAD_ORIGIN, undefined);
+  assert.deepEqual(config({ VERCEL: "1" }).routes, []);
 });
-test("Vercel API 누락·HTTP·인증정보·잘못된 원점은 빌드 설정에서 차단", () => {
+test("실행 프로그램 배포 링크는 인증정보 없는 HTTPS만 허용", () => {
   for (const value of [
-    undefined,
     "http://api.example.com",
     "https://user:pass@api.example.com",
-    "https://api.example.com/api",
-    "https://api.example.com?q=1",
+    "javascript:alert(1)",
   ])
-    assert.throws(() =>
-      config({ VERCEL: "1", ...(value ? { API_ORIGIN: value } : {}) }),
-    );
+    assert.throws(() => config({ VERCEL: "1", COMPANION_DOWNLOAD_URL: value }));
 });

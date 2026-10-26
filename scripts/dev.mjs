@@ -4,6 +4,7 @@ const children = [
   spawn(process.execPath, ["server/index.mjs"], {
     stdio: "inherit",
     windowsHide: true,
+    env: { ...process.env, LOCAL_COMPANION: "1", YOUTUBE_PROVIDER: "yt-dlp" },
   }),
   spawn(
     process.execPath,

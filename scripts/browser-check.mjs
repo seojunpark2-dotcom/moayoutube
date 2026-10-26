@@ -4,6 +4,15 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 await mkdir(".data/qa", { recursive: true });
 const browser = await chromium.launch({ channel: "msedge", headless: true });
+const web = process.env.CHECK_WEB || "http://localhost:3000";
+async function connect(page) {
+  const button = page.getByRole("button", {
+    name: "내 PC 연결하기",
+    exact: true,
+  });
+  if (await button.isVisible()) await button.click();
+  await page.getByText("내 PC에 연결됨", { exact: true }).waitFor();
+}
 const youtubeURL =
   process.argv[2] || "https://www.youtube.com/watch?v=jNQXAC9IVRw";
 try {
@@ -16,7 +25,8 @@ try {
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto("http://localhost:3000");
+    await page.goto(web);
+    await connect(page);
     assert.deepEqual(
       await page
         .locator('select[aria-label="요청 파일 형식"] option')
@@ -83,7 +93,8 @@ try {
   }
   if (!process.argv.includes("--sample-only")) {
     const page = await browser.newPage();
-    await page.goto("http://localhost:3000");
+    await page.goto(web);
+    await connect(page);
     await page
       .getByLabel("요청 파일 형식", { exact: true })
       .selectOption("mp4");

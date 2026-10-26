@@ -1,6 +1,6 @@
 {
   "name": "moadrop",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -15,7 +15,10 @@
     "test:browser": "node scripts/browser-check.mjs",
     "setup:youtube": "node scripts/setup-youtube.mjs",
     "start:web": "next start --hostname 0.0.0.0",
-    "start:api": "node server/index.mjs"
+    "start:api": "node server/index.mjs",
+    "start:local": "node scripts/local-start.mjs",
+    "build:local": "node scripts/build-local.mjs",
+    "package:windows": "node scripts/package-windows.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

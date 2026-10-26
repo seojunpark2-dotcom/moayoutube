@@ -3,7 +3,7 @@ import metadata from "../package.json" with { type: "json" };
 import { rateLimit } from "express-rate-limit";
 import { randomUUID } from "node:crypto";
 import { spawn, execFile } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { mkdir, rm, stat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { analyzeYoutube, youtubeCached, youtubeProvider } from "./youtube.mjs";
@@ -17,6 +17,13 @@ import {
   RESULT_TTL_MS,
 } from "./result-cache.mjs";
 import { isAllowedWebOrigin } from "./web-origins.mjs";
+import { localAccess, LOCAL_PORT } from "./local-access.mjs";
+const localMode = process.env.LOCAL_COMPANION === "1";
+const listenPort = localMode
+  ? LOCAL_PORT
+  : Number(process.env.PORT || process.env.API_PORT || 4000);
+if (localMode) process.env.YOUTUBE_PROVIDER = "yt-dlp";
+const access = localMode ? localAccess() : null;
 import {
   hasStorage,
   freeDiskBytes,
@@ -56,11 +63,29 @@ if (process.env.NODE_ENV === "test" && !testNamespace) {
   for (const [token, job] of await restoreResults(TEMP)) jobs.set(token, job);
 }
 app.disable("x-powered-by");
+if (localMode)
+  app.use((req, res, next) => {
+    res.set("X-Frame-Options", "DENY");
+    res.set("Content-Security-Policy", "frame-ancestors 'none'");
+    res.set("Referrer-Policy", "no-referrer");
+    next();
+  });
+if (access) app.use("/api", access.middleware);
 app.use(express.json({ limit: "4kb" }));
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   res.set("X-Content-Type-Options", "nosniff");
-  if (req.method === "POST" && !isAllowedWebOrigin(req.headers.origin))
+  if (
+    req.method === "POST" &&
+    !isAllowedWebOrigin(req.headers.origin) &&
+    !(
+      localMode &&
+      [
+        `http://127.0.0.1:${LOCAL_PORT}`,
+        `http://localhost:${LOCAL_PORT}`,
+      ].includes(req.headers.origin)
+    )
+  )
     return res.status(403).json({ error: "허용되지 않은 요청 출처입니다." });
   next();
 });
@@ -83,11 +108,18 @@ const jobLimit = rateLimit({
 app.get("/api/health", (_, res) =>
   res.json({
     ok: true,
+    mode: localMode ? "local-companion" : "server",
+    protocol: 1,
     version: metadata.version,
     youtubeProvider: youtubeProvider(),
     active: [...jobs.values()].filter((j) => j.state === "processing").length,
   }),
 );
+app.post("/api/local/shutdown", (req, res) => {
+  if (!localMode) return res.sendStatus(404);
+  res.json({ ok: true });
+  setTimeout(shutdown, 100);
+});
 app.get("/api/samples", async (_, res) =>
   res.json((await library()).map(publicInfo)),
 );
@@ -471,6 +503,11 @@ app.get("/api/jobs/:token", (req, res) => {
     mode: j.mode,
   });
 });
+app.post("/api/jobs/:token/ticket", (req, res) => {
+  const job = jobs.get(req.params.token);
+  if (!access || !job || job.state !== "done") return res.sendStatus(404);
+  res.json({ ticket: access.issue(job.token) });
+});
 app.get("/api/jobs/:token/file", (req, res) => {
   const j = jobs.get(req.params.token);
   if (!j || j.state !== "done")
@@ -487,6 +524,16 @@ const cleanup = setInterval(async () => {
   await pruneResults(jobs).catch(() => {});
 }, 60000);
 cleanup.unref();
+if (localMode)
+  app.use(
+    express.static(
+      path.resolve(existsSync("out/index.html") ? "out" : ".next-local"),
+      {
+        dotfiles: "deny",
+        index: "index.html",
+      },
+    ),
+  );
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   res.status(err.status || 400).json({
@@ -496,11 +543,12 @@ app.use((err, req, res, next) => {
         : err.message || "요청을 처리하지 못했습니다.",
   });
 });
-const listenPort = Number(process.env.PORT || process.env.API_PORT || 4000);
 if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535)
   throw Error("PORT 또는 API_PORT에 1~65535 범위의 포트를 지정하세요.");
-app.listen(listenPort, process.env.API_HOST || "127.0.0.1", () =>
-  console.log("변환 API 포트: " + listenPort),
+app.listen(
+  listenPort,
+  localMode ? "127.0.0.1" : process.env.API_HOST || "127.0.0.1",
+  () => console.log("변환 API 포트: " + listenPort),
 );
 function stopWorker(child) {
   if (process.platform === "win32" && child.pid)

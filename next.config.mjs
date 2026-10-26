@@ -1,43 +1,22 @@
-function origin(value, name) {
+function downloadURL(value) {
   const url = new URL(value);
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.pathname !== "/" ||
-    url.search ||
-    url.hash
-  )
-    throw Error(`${name}에는 인증 정보·경로 없는 HTTP(S) 원점을 지정하세요.`);
-  if (process.env.VERCEL === "1" && url.protocol !== "https:")
-    throw Error(`${name}에는 공개 HTTPS 주소가 필요합니다.`);
-  return url.origin;
+  if (url.protocol !== "https:" || url.username || url.password || url.hash)
+    throw Error(
+      "로컬 프로그램 다운로드에는 인증 정보 없는 HTTPS 주소가 필요합니다.",
+    );
+  return url.href;
 }
-if (process.env.VERCEL === "1" && !process.env.API_ORIGIN)
-  throw Error(
-    "Vercel 환경 변수 API_ORIGIN에 별도 변환 서버의 HTTPS 주소를 설정하세요. DEPLOYMENT.md를 참고하세요.",
-  );
-const apiOrigin = origin(
-  process.env.API_ORIGIN || "http://127.0.0.1:4000",
-  "API_ORIGIN",
-);
-const downloadOrigin =
-  process.env.NEXT_PUBLIC_DOWNLOAD_ORIGIN || process.env.API_ORIGIN;
-export default {
+const config = {
+  ...(process.env.LOCAL_EXPORT === "1"
+    ? { output: "export", distDir: ".next-local" }
+    : {}),
   env: {
-    NEXT_PUBLIC_DOWNLOAD_ORIGIN: downloadOrigin
-      ? origin(downloadOrigin, "NEXT_PUBLIC_DOWNLOAD_ORIGIN")
-      : "",
+    NEXT_PUBLIC_COMPANION_DOWNLOAD_URL: downloadURL(
+      process.env.COMPANION_DOWNLOAD_URL ||
+        "https://github.com/seojunpark2-dotcom/moayoutube-local/releases/latest/download/moayoutube-local-windows-x64.zip",
+    ),
   },
   devIndicators: false,
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${apiOrigin}/api/:path*`,
-      },
-    ];
-  },
   async headers() {
     return [
       {
@@ -51,3 +30,5 @@ export default {
     ];
   },
 };
+if (process.env.LOCAL_EXPORT === "1") delete config.headers;
+export default config;

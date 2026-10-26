@@ -3,6 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { POLL_TIMEOUT_MS } from "../server/limits.mjs";
 import { MP3_BITRATES, VIDEO_QUALITIES } from "../server/output-options.mjs";
 import {
+  connectLocal,
+  localAPI as api,
+  localFetch,
+  localDownload,
+} from "../lib/local-client";
+import {
   ArrowDown,
   ArrowDownToLine,
   ArrowRight,
@@ -52,34 +58,9 @@ function durationText(value: number, clock = false) {
         ? `${minutes}분 ${seconds}초`
         : `${seconds}초`;
 }
-async function api(url: string, body?: unknown) {
-  const r = await fetch(url, {
-    ...(body
-      ? {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      : {}),
-    // Bounds one control request, not the asynchronous conversion job.
-    signal: AbortSignal.timeout(90_000),
-  }).catch(() => {
-    throw Error(
-      "변환 서버 연결이 지연되거나 끊어졌습니다. 잠시 후 다시 시도해 주세요.",
-    );
-  });
-  let data;
-  try {
-    data = await r.json();
-  } catch {
-    throw Error(
-      "변환 서버가 정상 응답을 반환하지 않았습니다. 잠시 후 다시 시도해 주세요.",
-    );
-  }
-  if (!r.ok) throw Error(data.error || "요청을 처리하지 못했습니다.");
-  return data;
-}
 export default function Home() {
+  const [connected, setConnected] = useState(false),
+    [connecting, setConnecting] = useState(false);
   const [dark, setDark] = useState(false),
     [url, setUrl] = useState(""),
     [media, setMedia] = useState<Media | null>(null),
@@ -92,6 +73,7 @@ export default function Home() {
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
     [file, setFile] = useState(""),
+    [completedToken, setCompletedToken] = useState(""),
     [message, setMessage] = useState("");
   const [transferStats, setTransferStats] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -106,6 +88,36 @@ export default function Home() {
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
+  async function connect() {
+    setConnecting(true);
+    setError("");
+    try {
+      await connectLocal();
+      setConnected(true);
+    } catch (e) {
+      setConnected(false);
+      setError(e instanceof Error ? e.message : "연결에 실패했습니다.");
+    } finally {
+      setConnecting(false);
+    }
+  }
+  useEffect(() => {
+    if (
+      ["127.0.0.1", "localhost"].includes(window.location.hostname) &&
+      window.location.port === "47831"
+    ) {
+      connectLocal()
+        .then(() => setConnected(true))
+        .catch(() => {});
+    }
+  }, []);
+  useEffect(
+    () => () => {
+      if (media?.thumbnail.startsWith("blob:"))
+        URL.revokeObjectURL(media.thumbnail);
+    },
+    [media],
+  );
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
   }, [dark]);
@@ -118,11 +130,12 @@ export default function Home() {
     }
   }
   async function analyze(value = url, mode = tab) {
-    if (busy || loading) return;
+    if (busy || loading || !connected) return;
     setLoading(true);
     setError("");
     setMedia(null);
     setFile("");
+    setCompletedToken("");
     setMessage("");
     try {
       let u: URL;
@@ -138,6 +151,11 @@ export default function Home() {
         quality,
         bitrate,
       });
+      if (m.thumbnail?.startsWith("/api/")) {
+        const thumbnail = await localFetch(m.thumbnail);
+        if (thumbnail.ok)
+          m.thumbnail = URL.createObjectURL(await thumbnail.blob());
+      }
       setMedia(m);
       setFormat((current) =>
         current === "original" && !m.nativeAudioFormat ? "mp3" : current,
@@ -177,6 +195,7 @@ export default function Home() {
     setTransferStats("");
     setError("");
     setFile("");
+    setCompletedToken("");
     setMessage("변환을 준비하고 있습니다");
     try {
       const { token } = await api("/api/jobs", {
@@ -195,12 +214,9 @@ export default function Home() {
           setProgress(job.progress);
           if (job.state === "error") throw Error(job.error);
           if (job.state === "done") {
-            const link =
-              (process.env.NEXT_PUBLIC_DOWNLOAD_ORIGIN || "") +
-              "/api/jobs/" +
-              token +
-              "/file";
+            const link = await localDownload(token);
             setFile(link);
+            setCompletedToken(token);
             setBusy(false);
             setMessage("파일 준비가 완료되었습니다");
             const a = document.createElement("a");
@@ -353,6 +369,71 @@ export default function Home() {
           </div>
         </section>
         <section className="workspace" aria-label="영상 링크 분석">
+          <div className="local-connection" role="status">
+            <div>
+              <strong>
+                {connected ? "내 PC에 연결됨" : "로컬 프로그램 연결 필요"}
+              </strong>
+              <p>
+                영상 다운로드와 변환은 이 PC의 인터넷·저장 공간을 사용합니다.
+                프로그램을 실행한 뒤 연결해 주세요.
+              </p>
+            </div>
+            <div className="local-actions">
+              {connected && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    try {
+                      await api("/api/local/shutdown", {});
+                      setConnected(false);
+                      setFile("");
+                      setMessage("로컬 프로그램을 종료했습니다.");
+                    } catch (err) {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "종료에 실패했습니다.",
+                      );
+                    }
+                  }}
+                >
+                  프로그램 종료
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={connect}
+                disabled={connecting || busy}
+              >
+                {connecting
+                  ? "연결 중…"
+                  : connected
+                    ? "연결 다시 확인"
+                    : "내 PC 연결하기"}
+              </button>
+              <a
+                href="http://127.0.0.1:47831/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                로컬 화면 열기
+              </a>
+              {process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL && (
+                <a href={process.env.NEXT_PUBLIC_COMPANION_DOWNLOAD_URL}>
+                  Windows 실행 파일 받기
+                </a>
+              )}
+            </div>
+            {!connected && (
+              <p className="quality-note">
+                로컬 프로그램이 없다면 먼저 실행 파일이 필요합니다.
+                Chrome·Edge에서 로컬 네트워크 접근을 요청하면 허용해 주세요.
+                모바일 기기에는 Windows 프로그램을 실행할 수 없습니다.
+              </p>
+            )}
+          </div>
           <div className="workspace-heading">
             <span className="step-label">
               01 <span>링크 입력</span>
@@ -390,7 +471,10 @@ export default function Home() {
                 <Clipboard size={16} />
                 <span>붙여넣기</span>
               </button>
-              <button className="analyze" disabled={loading || busy}>
+              <button
+                className="analyze"
+                disabled={loading || busy || !connected}
+              >
                 {loading ? (
                   <LoaderCircle className="spin" size={17} />
                 ) : (
@@ -461,7 +545,7 @@ export default function Home() {
           <div className="input-bottom">
             <span>YouTube 영상·음원 다운로드 · 공개 영상 지원</span>
             <button
-              disabled={busy || loading}
+              disabled={busy || loading || !connected}
               className="sample-button"
               onClick={() => {
                 setUrl(SAMPLE);
@@ -547,9 +631,17 @@ export default function Home() {
                     <button
                       role="tab"
                       aria-selected={tab === "audio"}
-                      disabled={busy || !media.convertible}
+                      disabled={
+                        busy ||
+                        loading ||
+                        (!media.convertible && !media.youtube)
+                      }
                       className={tab === "audio" ? "selected" : ""}
                       onClick={() => {
+                        if (!media.convertible && media.youtube) {
+                          void analyze(url, "audio");
+                          return;
+                        }
                         setTab("audio");
                         setFile("");
                         setMessage("");
@@ -691,7 +783,28 @@ export default function Home() {
                         aria-label="변환 진행률"
                       />
                       {file && (
-                        <a href={file} download>
+                        <a
+                          href={file}
+                          download
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            try {
+                              const link = await localDownload(completedToken);
+                              const a = document.createElement("a");
+                              a.href = link;
+                              a.download = "";
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            } catch (err) {
+                              setError(
+                                err instanceof Error
+                                  ? err.message
+                                  : "다운로드 연결에 실패했습니다.",
+                              );
+                            }
+                          }}
+                        >
                           다운로드가 시작되지 않았다면 여기를 눌러 저장하세요{" "}
                           <ArrowDownToLine size={13} />
                         </a>

@@ -1,6 +1,8 @@
 node_modules
 .git
 .next
+.next-local
+out
 .data
 .tools
 .npm-cache

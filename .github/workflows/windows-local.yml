@@ -1,0 +1,43 @@
+name: Verify Windows local app
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/local-companion]
+    paths:
+      [
+        "server/**",
+        "app/**",
+        "lib/**",
+        "scripts/**",
+        "package*.json",
+        next.config.mjs,
+        ".github/workflows/windows-local.yml",
+      ]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: npm ci
+      - run: npm run setup:youtube
+      - run: npm run setup
+      - run: npm test
+      - run: npm run build:local
+      - run: npm run package:windows
+      - run: node scripts/check-package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moayoutube-local-windows-x64
+          path: |
+            .data/dist/moadrop-windows-*.zip
+            .data/dist/moadrop-windows-*.sha256
+          retention-days: 7

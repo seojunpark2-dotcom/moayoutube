@@ -793,6 +793,37 @@ footer > span:last-child {
   grid-column: 1 / -1;
   margin: 0;
 }
+.local-connection {
+  padding: 18px;
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg);
+}
+.local-connection p {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.local-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 12px 0;
+}
+.local-actions button,
+.local-actions a {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.local-actions button {
+  background: #d7f57c;
+  color: #222a20;
+  border: 0;
+  cursor: pointer;
+}
 .permission-note {
   font-size: 10px;
   color: var(--muted);
